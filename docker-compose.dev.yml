@@ -1,0 +1,63 @@
+# Local dev stack — Postgres + Redis only.
+# In production these live on the same GPU host alongside the app.
+# `npm run dev:db` starts these; `npm run dev` then starts web + api.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: lp-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lp
+      POSTGRES_PASSWORD: lp_dev_password
+      POSTGRES_DB: learning_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lp -d learning_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: lp-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Local MinIO for object storage during dev (mirrors R2 / S3 API surface).
+  # In production this is replaced by Cloudflare R2 or stays as MinIO on the
+  # GPU host depending on data-residency preference.
+  minio:
+    image: minio/minio:latest
+    container_name: lp-minio-dev
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: lp_dev
+      MINIO_ROOT_PASSWORD: lp_dev_password_minio
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

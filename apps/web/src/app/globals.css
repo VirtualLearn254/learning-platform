@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Brand palette mirrors the lesson player's design tokens so the app
+   and the lesson previews feel like one product. */
+@theme {
+  --color-bg:         #FBF8F1;
+  --color-ink:        #1A1A1F;
+  --color-muted:      #6B6457;
+  --color-accent:     #0E7C66;
+  --color-accent-2:   #C76A4A;
+  --color-card:       #FFFFFF;
+  --color-border:     rgba(26, 26, 31, 0.10);
+
+  --font-display:     "Bricolage Grotesque", "Cambria", serif;
+  --font-body:        "Sora", system-ui, sans-serif;
+  --font-mono:        "JetBrains Mono", "Courier New", monospace;
+}
+
+html, body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}

@@ -1,0 +1,88 @@
+/* Player chrome — matches the app's editorial brand palette so the
+   SCORM-embedded view feels like one product with the dashboard. */
+
+:root {
+  --bg:        #FBF8F1;
+  --ink:       #1A1A1F;
+  --muted:     #6B6457;
+  --accent:    #0E7C66;
+  --accent-2:  #C76A4A;
+  --border:    rgba(26,26,31,0.10);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--ink); font-family: 'Sora', system-ui, sans-serif; color: var(--ink); }
+
+.player-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  background: var(--bg);
+}
+
+.player-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  overflow: hidden;
+}
+.player-stage video {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+.player-controls {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.ctl-btn {
+  background: transparent; border: 0; color: var(--ink);
+  font-size: 16px; cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background 150ms;
+}
+.ctl-btn:hover { background: rgba(26,26,31,0.06); }
+
+.ctl-progress {
+  flex: 1; position: relative; height: 4px;
+  background: var(--border); border-radius: 2px;
+  cursor: pointer;
+}
+.ctl-bar {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: var(--accent); border-radius: 2px;
+  transition: width 100ms linear;
+}
+.ctl-thumb {
+  position: absolute; top: 50%;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  transform: translate(-50%, -50%);
+  transition: left 100ms linear;
+}
+
+.ctl-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.player-callback-prompt {
+  position: absolute;
+  bottom: 60px; right: 14px;
+  max-width: 320px;
+  padding: 12px 16px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+.player-callback-prompt strong { color: var(--accent); }

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lesson</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500..700&family=Sora:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="player.css">
+</head>
+<body>
+  <div class="player-wrap">
+    <div class="player-stage" id="stage">
+      <video id="video" preload="auto" playsinline></video>
+      <!-- Quiz overlay mounts here at runtime -->
+    </div>
+
+    <div class="player-controls" id="controls">
+      <button class="ctl-btn" id="play" aria-label="Play/pause">▶</button>
+      <div class="ctl-progress" id="progress">
+        <div class="ctl-bar" id="bar"></div>
+        <div class="ctl-thumb" id="thumb"></div>
+      </div>
+      <span class="ctl-time" id="time">0:00 / 0:00</span>
+      <button class="ctl-btn" id="callback" aria-label="Reference earlier concept" hidden>↶</button>
+      <button class="ctl-btn" id="mute" aria-label="Mute">🔊</button>
+      <button class="ctl-btn" id="fs" aria-label="Fullscreen">⛶</button>
+    </div>
+
+    <div class="player-callback-prompt" id="callback-prompt" hidden>
+      <p id="callback-text">Remember when we covered <strong></strong>? Press the button to revisit.</p>
+    </div>
+  </div>
+
+  <script src="scorm-api.js"></script>
+  <script src="xapi-emitter.js"></script>
+  <script src="quiz-overlay.js"></script>
+  <script>
+    // Bootstrap the player. The SCORM context sets PARAMS via cmi.launch_data
+    // or a window.LESSON_MANIFEST global injected by the SCORM html wrapper.
+    (async function bootstrap() {
+      const video = document.getElementById("video");
+      const lessonManifest = window.LESSON_MANIFEST || (await fetch("./manifest.json").then(r => r.json()));
+
+      video.src = lessonManifest.masterUrl;
+
+      // SCORM connect — best-effort.
+      const scorm = window.SCORM = window.SCORM || (window.createScormApi && window.createScormApi());
+      if (scorm) {
+        scorm.connect();
+        scorm.setStatus("incomplete");
+      }
+
+      // xAPI emitter.
+      const xapi = window.XAPI = window.createXapiEmitter ? window.createXapiEmitter({
+        lessonId: lessonManifest.id,
+        endpoint: lessonManifest.lrsEndpoint || "/api/xapi/statements",
+        actorId: scorm?.getLearnerId() ?? `anon-${crypto.randomUUID()}`,
+      }) : null;
+
+      // Mount the quiz overlay (this is the editorial-minimalist five-type one).
+      const dispose = window.installQuizOverlay(video, lessonManifest);
+
+      // Wire controls + callback button.
+      installControls(video, lessonManifest, xapi);
+
+      // SCORM completion on master end.
+      video.addEventListener("ended", () => {
+        if (scorm) {
+          scorm.setStatus("completed");
+          scorm.commit();
+        }
+        if (xapi) xapi.emit("video_complete", { courseId: lessonManifest.courseId, beatId: lessonManifest.lastBeatId });
+      });
+
+      // Unload: persist + disconnect SCORM.
+      window.addEventListener("beforeunload", () => {
+        if (scorm) {
+          scorm.commit();
+          scorm.disconnect();
+        }
+      });
+    })();
+
+    function installControls(video, manifest, xapi) {
+      const $ = (id) => document.getElementById(id);
+      const play = $("play"), bar = $("bar"), thumb = $("thumb"), time = $("time");
+      const cbBtn = $("callback"), cbPrompt = $("callback-prompt");
+
+      play.addEventListener("click", () => {
+        if (video.paused) { video.play(); xapi?.emit("video_play"); }
+        else { video.pause(); xapi?.emit("video_pause"); }
+      });
+      video.addEventListener("play",  () => { play.textContent = "❚❚"; });
+      video.addEventListener("pause", () => { play.textContent = "▶"; });
+
+      video.addEventListener("timeupdate", () => {
+        const d = video.duration || manifest.durationSec || 1;
+        const pct = (video.currentTime / d) * 100;
+        bar.style.width = pct + "%";
+        thumb.style.left = pct + "%";
+        time.textContent = `${fmt(video.currentTime)} / ${fmt(d)}`;
+        checkCallback(video.currentTime, manifest, cbBtn, cbPrompt, xapi);
+      });
+
+      $("progress").addEventListener("click", (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const pct = (e.clientX - rect.left) / rect.width;
+        video.currentTime = pct * (video.duration || manifest.durationSec);
+        xapi?.emit("video_seek", { toSec: video.currentTime });
+      });
+
+      $("mute").addEventListener("click", () => { video.muted = !video.muted; });
+      $("fs").addEventListener("click", () => {
+        const wrap = document.querySelector(".player-wrap");
+        if (!document.fullscreenElement) wrap.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      });
+
+      cbBtn.addEventListener("click", () => {
+        const cb = cbBtn.dataset.callback ? JSON.parse(cbBtn.dataset.callback) : null;
+        if (!cb) return;
+        const masterSrc = video.src;
+        const resumeAt = video.currentTime;
+        // Seek to the earlier concept.
+        video.currentTime = cb.toTimestampSec;
+        xapi?.emit("callback_press", { fromBeatKey: cb.fromBeatKey, toBeatKey: cb.toBeatKey });
+        // Auto-return after 30s by default (or until user scrubs forward).
+        cbPrompt.hidden = true;
+        const onSeeked = () => {
+          if (video.currentTime > cb.toTimestampSec + 30) {
+            video.removeEventListener("timeupdate", onSeeked);
+          }
+        };
+        video.addEventListener("timeupdate", onSeeked);
+      });
+    }
+
+    function checkCallback(t, manifest, btn, prompt, xapi) {
+      const cb = (manifest.callbacks || []).find((c) => {
+        const ch = manifest.chapters.find((x) => x.beatKey === c.fromBeatKey);
+        return ch && t >= ch.startSec && t < ch.startSec + 6;
+      });
+      if (cb) {
+        btn.hidden = false;
+        btn.dataset.callback = JSON.stringify(cb);
+        prompt.querySelector("strong").textContent = cb.concept;
+        prompt.hidden = false;
+      } else {
+        btn.hidden = true;
+        prompt.hidden = true;
+      }
+    }
+
+    function fmt(s) {
+      const m = Math.floor(s / 60);
+      const ss = Math.floor(s % 60).toString().padStart(2, "0");
+      return `${m}:${ss}`;
+    }
+  </script>
+</body>
+</html>

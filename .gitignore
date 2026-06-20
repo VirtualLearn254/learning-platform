@@ -1,0 +1,35 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+.env.prod
+
+# Build outputs
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+.pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Local data (when running outside docker)
+data/
+storage/
+postgres_data/
+redis_data/
+minio_data/
+
+# Generated lesson outputs (large)
+out/
+captures/

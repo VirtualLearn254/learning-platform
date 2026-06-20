@@ -1,0 +1,52 @@
+# Production Caddy config — no domain, IP-based access.
+# Caddy listens on :80 (HTTP). Inside the tailnet, traffic is already
+# encrypted by Tailscale's WireGuard. When you add a domain later, change
+# the `:80` block header to `your-domain.com` and Caddy auto-issues TLS.
+
+:80 {
+    # Health check (lets external monitoring confirm Caddy + API are alive)
+    handle /healthz {
+        respond "ok" 200
+    }
+
+    # Backend API
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy api:3001
+    }
+
+    # MinIO console (admin only — guard at the network layer via Tailscale)
+    handle /minio-console/* {
+        uri strip_prefix /minio-console
+        reverse_proxy minio:9001
+    }
+
+    # Object storage browser (read-only access for media URLs)
+    handle /storage/* {
+        uri strip_prefix /storage
+        reverse_proxy minio:9000
+    }
+
+    # Everything else → Next.js
+    handle {
+        reverse_proxy web:3000
+    }
+
+    # Compress responses
+    encode gzip
+
+    # Useful headers
+    header {
+        # Don't leak Caddy version
+        -Server
+        # Basic security headers
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

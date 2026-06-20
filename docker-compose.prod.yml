@@ -1,0 +1,138 @@
+# Production stack — one Contabo VPS, all services here.
+#
+# Reverse proxy: Caddy on :80 (Tailscale handles encryption inside the
+# tailnet; we skip TLS since no public domain is configured).
+#
+# Services exposed externally (via Caddy):
+#   • /          → web (Next.js)
+#   • /api/*     → api (Hono)
+#   • /storage/* → MinIO (S3-compatible bucket browser)
+#
+# Services internal-only (only reachable inside the docker network):
+#   • postgres · redis · workers
+
+services:
+  # ── App ─────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      WEB_API_BASE_URL: http://api:3001
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [lp]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://lp:${POSTGRES_PASSWORD:-changeme}@postgres:5432/learning_platform
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks: [lp]
+
+  workers:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://lp:${POSTGRES_PASSWORD:-changeme}@postgres:5432/learning_platform
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+    command: ["npx", "tsx", "apps/api/src/workers/index.ts"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [lp]
+
+  # ── Reverse proxy ───────────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+    networks: [lp]
+
+  # ── Data plane ──────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: learning_platform
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lp -d learning_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [lp]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [lp]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lp_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_strong}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [lp]
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  lp:
+    driver: bridge
