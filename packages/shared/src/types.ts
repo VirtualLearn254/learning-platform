@@ -55,6 +55,9 @@ export interface Lesson {
   order: number;
   voicePreference: VoicePreference | null;
   styleHints: string[] | null;
+  masterMp4Key: string | null;
+  scormPackageKey: string | null;
+  publishedAt: string | null;
 }
 
 export interface Beat {
@@ -71,10 +74,12 @@ export interface Beat {
   isAlt: boolean;        // alt beat for scenario branching
   conceptsTaught: string[];
   conceptsRequired: string[];
-  htmlPath: string | null;
-  audioPath: string | null;
-  mp4Path: string | null;
+  htmlKey: string | null;
+  audioKey: string | null;
+  mp4Key: string | null;
   durationSeconds: number | null;
+  revisionCount: number;
+  errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
 }
