@@ -99,7 +99,10 @@ for i in $(seq 1 60); do
 done
 
 log "pushing schema"
-docker compose -f "$COMPOSE_FILE" exec -T api npm run db:push || warn "db:push had a non-zero exit — check logs"
+# drizzle-kit 0.30 has interactive prompts that don't work over `exec -T`.
+# `--force` (in the script) skips confirmation; piping `yes` is a safety net
+# in case any other y/n prompt appears.
+docker compose -f "$COMPOSE_FILE" exec -T api sh -c "yes | npm run db:push" || warn "db:push had a non-zero exit — check logs"
 
 # ── 6. Final status ─────────────────────────────────────────────────
 log "stack status"
