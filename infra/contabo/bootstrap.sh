@@ -100,11 +100,13 @@ else
   MINIO_USER=$(grep '^MINIO_ROOT_USER=' .env.prod | cut -d= -f2-)
   MINIO_PW=$(grep '^MINIO_ROOT_PASSWORD=' .env.prod | cut -d= -f2-)
   CURRENT_S3_KEY=$(grep '^S3_ACCESS_KEY=' .env.prod | cut -d= -f2- || echo "")
+  ENV_PROD_CHANGED=0
   if [ -n "$MINIO_USER" ] && [ -n "$MINIO_PW" ] && [ "$CURRENT_S3_KEY" != "$MINIO_USER" ]; then
     log "syncing S3_ACCESS_KEY / S3_SECRET_KEY to MinIO root credentials"
     # Use a different delimiter for sed since secrets may contain /
     sed -i "s|^S3_ACCESS_KEY=.*|S3_ACCESS_KEY=$MINIO_USER|" .env.prod
     sed -i "s|^S3_SECRET_KEY=.*|S3_SECRET_KEY=$MINIO_PW|" .env.prod
+    ENV_PROD_CHANGED=1
     ok "S3 credentials now match MinIO root"
   fi
 fi
@@ -112,6 +114,14 @@ fi
 # ── 4. Build + start ────────────────────────────────────────────────
 log "building + starting docker compose stack (first build = 5-10 min)"
 docker compose -f "$COMPOSE_FILE" up -d --build
+
+# Docker Compose doesn't always notice env_file CONTENT changes (only path
+# changes). If we modified .env.prod above, force-recreate the services that
+# depend on those env vars so they actually pick up the new values.
+if [ "${ENV_PROD_CHANGED:-0}" = "1" ]; then
+  log "force-recreating api + workers to pick up updated .env.prod"
+  docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps api workers
+fi
 
 # ── 5. Wait for api to be healthy + run schema push ─────────────────
 log "waiting for postgres to be ready"
