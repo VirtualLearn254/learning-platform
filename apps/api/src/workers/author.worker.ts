@@ -22,8 +22,8 @@ interface JobData { beatId: string; isRevision: boolean }
 
 const VisualSpecOut = z.object({
   background: z.enum(["solid", "ai_image", "stock_image"]).default("solid"),
-  onScreenText: z.array(z.string().max(60)).min(0).max(5).default([]),
-  callouts: z.array(z.string().max(40)).min(0).max(3).default([]),
+  onScreenText: z.array(z.string().min(1).max(140)).min(0).max(6).default([]),
+  callouts: z.array(z.string().min(1).max(80)).min(0).max(4).default([]),
 });
 
 const AuthorOutput = z.object({
@@ -48,8 +48,8 @@ OUTPUT: a single JSON object with this exact shape:
   "script":     string (60-150 words of narration-ready spoken text),
   "visualSpec": {
     "background":   "solid" | "ai_image" | "stock_image",
-    "onScreenText": [ short phrases displayed during the beat, 2-5 strings of up to 60 chars each ],
-    "callouts":     [ key terms to emphasize, 1-3 strings of up to 40 chars each ]
+    "onScreenText": [ short phrases displayed during the beat — 2-5 strings, each up to ~120 chars ],
+    "callouts":     [ key terms or short phrases to emphasize — 1-3 strings, each up to ~70 chars ]
   },
   "conceptsTaught":   [ 1-3 slug identifiers like "linear_eq_definition" ],
   "conceptsRequired": [ optional 0-2 prerequisite slugs from earlier in the lesson ]
