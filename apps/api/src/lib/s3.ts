@@ -79,23 +79,14 @@ export function createS3Client(): S3Client {
     async getObject(key) {
       await ensureBucket(aws);
       const out = await aws.send(new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
-      const stream = out.Body as ReadableStream<Uint8Array> | undefined;
-      if (!stream) throw new Error(`S3 getObject ${key}: no body`);
-      const chunks: Uint8Array[] = [];
-      const reader = stream.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) chunks.push(value);
-      }
-      const total = chunks.reduce((n, c) => n + c.length, 0);
-      const buf = new Uint8Array(total);
-      let pos = 0;
-      for (const c of chunks) { buf.set(c, pos); pos += c.length; }
+      if (!out.Body) throw new Error(`S3 getObject ${key}: no body`);
+      // AWS SDK v3 attaches a transformToByteArray helper on the Body in both
+      // Node (Readable) and browser (ReadableStream) environments.
+      const body = await (out.Body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
       return {
-        body: buf,
+        body,
         contentType: out.ContentType ?? "application/octet-stream",
-        size: out.ContentLength ?? buf.length,
+        size: out.ContentLength ?? body.length,
       };
     },
 
