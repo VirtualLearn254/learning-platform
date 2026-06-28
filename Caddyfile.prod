@@ -12,6 +12,10 @@
     # Backend API
     handle /api/* {
         uri strip_prefix /api
+        # 100 MB max upload for course material PDFs
+        request_body {
+            max_size 100MB
+        }
         reverse_proxy api:3001
     }
 

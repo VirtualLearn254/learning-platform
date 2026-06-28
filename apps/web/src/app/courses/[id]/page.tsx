@@ -13,16 +13,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function CourseDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data: treeData, mutate: refreshTree } = useSWR(`course-tree-${id}`, () => api.getCourseTree(id));
-  const { data: materialsData, mutate: refreshMaterials } = useSWR(`materials-${id}`, () => api.listMaterials(id));
+  const { data: materialsData, mutate: refreshMaterials } = useSWR(
+    `materials-${id}`,
+    () => api.listMaterials(id),
+    // Poll while any material has no ingestedAt — ticks the UI live while ingest runs.
+    { refreshInterval: (latest) => latest?.materials.some((m) => !m.ingestedAt) ? 4000 : 0 },
+  );
+  const { data: treeData, mutate: refreshTree } = useSWR(
+    `course-tree-${id}`,
+    () => api.getCourseTree(id),
+    { refreshInterval: (latest) => latest?.tree.sections.length ? 0 : (materialsData?.materials.length ? 4000 : 0) },
+  );
 
   async function handleUpload(files: File[]) {
     for (const file of files) {
-      const res = await api.createMaterialUpload({
-        courseId: id, filename: file.name, mimeType: file.type || "application/octet-stream", size: file.size,
-      });
-      // In the real impl: PUT to res.uploadUrl, then call triggerIngest.
-      await api.triggerIngest(res.material.id);
+      await api.uploadMaterial({ courseId: id, file, triggerIngest: true });
     }
     await Promise.all([refreshMaterials(), refreshTree()]);
   }

@@ -55,9 +55,22 @@ export const api = {
 
   // Materials
   listMaterials: (courseId: string) =>
-    fetchJson<{ materials: Array<{ id: string; filename: string; mimeType: string; sizeBytes: number; ingestedAt: string | null }> }>(`/materials?courseId=${courseId}`),
-  createMaterialUpload: (input: { courseId: string; filename: string; mimeType: string; size: number }) =>
-    fetchJson<{ material: { id: string; s3Key: string }; uploadUrl: string }>("/materials", { method: "POST", body: JSON.stringify(input) }),
+    fetchJson<{ materials: Array<{ id: string; filename: string; mimeType: string; sizeBytes: number; ingestedAt: string | null; s3Key: string }> }>(`/materials?courseId=${courseId}`),
+  getMaterial: (id: string) =>
+    fetchJson<{ material: { id: string; courseId: string; filename: string; mimeType: string; sizeBytes: number; ingestedAt: string | null; uploadedAt: string; s3Key: string; extractedText: string | null } }>(`/materials/${id}`),
+  /** Direct multipart upload. Set triggerIngest=true to auto-queue ingest after upload. */
+  uploadMaterial: async (input: { courseId: string; file: File; triggerIngest?: boolean }) => {
+    const fd = new FormData();
+    fd.append("courseId", input.courseId);
+    fd.append("file", input.file);
+    if (input.triggerIngest) fd.append("triggerIngest", "true");
+    const res = await fetch("/api/materials", { method: "POST", body: fd });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+    }
+    return res.json() as Promise<{ material: { id: string; s3Key: string; filename: string }; ingestJobId?: string }>;
+  },
   triggerIngest: (materialId: string) =>
     fetchJson<{ ok: boolean; jobId: string }>(`/materials/${materialId}/ingest`, { method: "POST" }),
 

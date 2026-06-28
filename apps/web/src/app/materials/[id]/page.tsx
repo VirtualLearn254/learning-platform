@@ -12,23 +12,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/use-toast";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-interface Material {
-  id: string; courseId: string; filename: string; mimeType: string; sizeBytes: number;
-  s3Key: string; uploadedAt: string; extractedText: string | null; ingestedAt: string | null;
-}
-
 export default function MaterialDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, isLoading } = useSWR<{ materials: Material[] }>(`/api/materials?id=${id}`, fetcher);
-  const material = data?.materials?.[0];
+  // Auto-refresh every 4s while ingest is pending so the UI ticks live.
+  const { data, isLoading, mutate } = useSWR(
+    `material-${id}`,
+    () => api.getMaterial(id),
+    { refreshInterval: (latest) => latest?.material?.ingestedAt ? 0 : 4000 },
+  );
+  const material = data?.material;
   const { notify } = useToast();
 
   async function reingest() {
     if (!material) return;
     await api.triggerIngest(material.id);
     notify({ title: "Re-ingest queued", variant: "success" });
+    mutate();
   }
 
   return (
