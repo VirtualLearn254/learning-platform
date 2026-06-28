@@ -16,6 +16,7 @@ const UpdateBeatSchema = z.object({
 
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
+import { breadcrumbsForBeat } from "../lib/breadcrumbs.js";
 
 export const beatsRoute = new Hono()
   .get("/", async (c) => {
@@ -35,7 +36,8 @@ export const beatsRoute = new Hono()
     const id = c.req.param("id");
     const beat = await db.query.beats.findFirst({ where: eq(tables.beats.id, id) });
     if (!beat) return c.json({ error: "not_found" }, 404);
-    return c.json({ beat });
+    const breadcrumbs = await breadcrumbsForBeat(id);
+    return c.json({ beat, breadcrumbs });
   })
   .post("/:id/author", async (c) => {
     const id = c.req.param("id");

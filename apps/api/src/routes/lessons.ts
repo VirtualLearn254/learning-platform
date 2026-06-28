@@ -3,6 +3,7 @@ import { eq, asc, inArray } from "drizzle-orm";
 
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
+import { breadcrumbsForLesson } from "../lib/breadcrumbs.js";
 
 export const lessonsRoute = new Hono()
   .get("/:id", async (c) => {
@@ -12,7 +13,8 @@ export const lessonsRoute = new Hono()
     const beats = await db.select().from(tables.beats)
       .where(eq(tables.beats.lessonId, id))
       .orderBy(asc(tables.beats.order));
-    return c.json({ lesson, beats });
+    const breadcrumbs = await breadcrumbsForLesson(id);
+    return c.json({ lesson, beats, breadcrumbs });
   })
   .post("/:id/author", async (c) => {
     /**

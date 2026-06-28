@@ -30,7 +30,7 @@ export const api = {
     fetchJson<{ course: Course }>("/courses", { method: "POST", body: JSON.stringify(input) }),
 
   // Lessons
-  getLesson: (id: string) => fetchJson<{ lesson: Lesson; beats: Beat[] }>(`/lessons/${id}`),
+  getLesson: (id: string) => fetchJson<{ lesson: Lesson; beats: Beat[]; breadcrumbs: Breadcrumb[] }>(`/lessons/${id}`),
   authorLesson: (id: string, opts?: { all?: boolean }) =>
     fetchJson<{ ok: boolean; queued?: number; jobIds?: string[]; message?: string; error?: string }>(`/lessons/${id}/author${opts?.all ? "?all=true" : ""}`, { method: "POST" }),
   stitchLesson: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/stitch`, { method: "POST" }),
@@ -43,7 +43,7 @@ export const api = {
     if (params?.lessonId) qs.set("lessonId", params.lessonId);
     return fetchJson<{ beats: Beat[] }>(`/beats${qs.toString() ? `?${qs}` : ""}`);
   },
-  getBeat: (id: string) => fetchJson<{ beat: Beat }>(`/beats/${id}`),
+  getBeat: (id: string) => fetchJson<{ beat: Beat; breadcrumbs: Breadcrumb[] }>(`/beats/${id}`),
   authorBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/author`, { method: "POST" }),
   giveBeatFeedback: (id: string, input: { feedback: string; action: "approve" | "revise" | "reject"; screenshotKeys?: string[] }) =>
     fetchJson<{ ok: boolean; stage: BeatStage }>(`/beats/${id}/feedback`, { method: "POST", body: JSON.stringify(input) }),
@@ -176,4 +176,10 @@ export interface JobSummary {
   errorMessage: string | null;
   startedAt: string | null;
   endedAt: string | null;
+}
+
+export interface Breadcrumb {
+  kind: "courses-root" | "course" | "section" | "module" | "lesson" | "beat";
+  id: string | null;
+  title: string;
 }

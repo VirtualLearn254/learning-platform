@@ -69,16 +69,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
+export function PageHeader({ title, description, actions, breadcrumbs }: { title: string; description?: string; actions?: ReactNode; breadcrumbs?: ReactNode }) {
   return (
-    <div className="shrink-0 px-12 py-8 border-b border-[var(--color-border)] flex items-end justify-between">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
-          {title}
-        </h1>
-        {description && <p className="text-sm text-[var(--color-muted)] mt-1">{description}</p>}
+    <div className="shrink-0 px-12 py-6 border-b border-[var(--color-border)]">
+      {breadcrumbs && <div className="mb-3">{breadcrumbs}</div>}
+      <div className="flex items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
+            {title}
+          </h1>
+          {description && <p className="text-sm text-[var(--color-muted)] mt-1">{description}</p>}
+        </div>
+        {actions && <div className="flex gap-2 flex-wrap">{actions}</div>}
       </div>
-      {actions && <div className="flex gap-2">{actions}</div>}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { CourseTree } from "@/components/course-tree";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 
 function JobStatusBadge({ job, ingestedAt }: { job: JobSummary | null; ingestedAt: string | null }) {
   if (job?.status === "running")    return <Badge variant="accent">running</Badge>;
@@ -78,7 +79,14 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
 
   return (
     <AppShell>
-      <PageHeader title={tree.title} description={tree.summary ?? undefined} />
+      <PageHeader
+        title={tree.title}
+        description={tree.summary ?? undefined}
+        breadcrumbs={<Breadcrumbs items={[
+          { kind: "courses-root", id: null, title: "Courses" },
+          { kind: "course", id: tree.id, title: tree.title },
+        ]} />}
+      />
       <PageBody>
         <Tabs defaultValue="tree">
           <TabsList>

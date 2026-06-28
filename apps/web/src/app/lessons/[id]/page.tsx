@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { VideoPlayer } from "@/components/video-player";
 import { BeatCard } from "@/components/beat-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { useToast } from "@/lib/use-toast";
 
 export default function LessonDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -61,6 +62,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       <PageHeader
         title={lesson.title}
         description={lesson.summary ?? undefined}
+        breadcrumbs={data.breadcrumbs && <Breadcrumbs items={data.breadcrumbs} />}
         actions={
           <div className="flex gap-2">
             {ingestedCount > 0 && (
