@@ -33,3 +33,6 @@ minio_data/
 # Generated lesson outputs (large)
 out/
 captures/
+
+# Generated at build time
+apps/web/src/lib/docs.generated.ts

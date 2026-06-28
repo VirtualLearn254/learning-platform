@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, KanbanSquare, BarChart3, Settings, Sparkles, Home, Palette } from "lucide-react";
+import { BookOpen, KanbanSquare, BarChart3, Settings, Sparkles, Home, Palette, FileText } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
@@ -19,6 +19,7 @@ const NAV: NavItem[] = [
   { href: "/analytics",  label: "Analytics",  icon: BarChart3 },
   { href: "/styles",     label: "Styles",     icon: Palette },
   { href: "/hermes",     label: "Hermes",     icon: Sparkles },
+  { href: "/docs",       label: "Docs",       icon: FileText },
   { href: "/settings",   label: "Settings",   icon: Settings },
 ];
 

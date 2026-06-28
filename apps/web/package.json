@@ -3,11 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
-    "build": "next build",
+    "dev": "node scripts/build-docs.mjs && next dev -p 3000",
+    "build": "node scripts/build-docs.mjs && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint"
+    "lint": "next lint",
+    "docs:build": "node scripts/build-docs.mjs"
   },
   "dependencies": {
     "@lp/shared": "*",
@@ -24,6 +25,8 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^9.0.0",
+    "remark-gfm": "^4.0.0",
     "swr": "^2.3.0",
     "tailwind-merge": "^2.5.0"
   },

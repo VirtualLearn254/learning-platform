@@ -16,6 +16,8 @@ RUN npm ci --omit=optional || npm install
 # Copy source
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
+# docs/ is read at build time by apps/web/scripts/build-docs.mjs
+COPY docs ./docs
 
 # Build Next.js to standalone output
 WORKDIR /app/apps/web
