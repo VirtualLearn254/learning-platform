@@ -5,8 +5,17 @@
 FROM node:22-alpine AS base
 WORKDIR /app
 
-# Need git for some npm transitive deps + curl for the healthcheck
-RUN apk add --no-cache git curl
+# Need git for some npm transitive deps + curl for the healthcheck.
+# chromium + ffmpeg are used by the render worker (Puppeteer + video assembly).
+# ttf-freefont + font packages so the headless browser has system fonts.
+RUN apk add --no-cache \
+      git curl \
+      chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto \
+      ffmpeg
+
+# Tell puppeteer-core where the system chromium lives instead of downloading one.
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    PUPPETEER_SKIP_DOWNLOAD=true
 
 # ── Install workspace deps ────────────────────────────────────────────
 COPY package.json package-lock.json* tsconfig.base.json ./

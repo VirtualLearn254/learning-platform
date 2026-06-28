@@ -4,7 +4,7 @@ import { use } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
-import { Wand2 } from "lucide-react";
+import { Wand2, Film } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
@@ -58,6 +58,15 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
               <Wand2 className="w-3.5 h-3.5" />
               {beat.stage === "ingested" || beat.stage === "queued" ? "Author" : "Re-author"}
             </Button>
+            {(beat.stage === "ai_review" || beat.stage === "human_review" || beat.stage === "approved" || beat.mp4Key) && (
+              <Button
+                size="sm"
+                onClick={async () => { await api.renderBeat(id); await mutate(); }}
+              >
+                <Film className="w-3.5 h-3.5" />
+                {beat.mp4Key ? "Re-render" : "Render"}
+              </Button>
+            )}
           </div>
         }
       />
