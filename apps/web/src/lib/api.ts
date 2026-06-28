@@ -99,11 +99,25 @@ export const api = {
 
   // AI provider dashboard
   listAIProviders: () =>
-    fetchJson<{ providers: Array<{ id: "anthropic" | "openai" | "deepseek" | "local"; displayName: string; envKey: string; signupUrl: string; pricing: string; configured: boolean }> }>("/ai/providers"),
+    fetchJson<{ providers: Array<{ id: "anthropic" | "openai" | "deepseek" | "local"; displayName: string; envKey: string; signupUrl: string; pricing: string; configured: boolean; secretName: string }> }>("/ai/providers"),
   listAIProfiles: () =>
     fetchJson<{ profiles: Array<{ id: string; preferred: string[]; activeProvider: string | null; activeModel: string | null; temperature: number; maxTokens: number; supportsVision: boolean }> }>("/ai/profiles"),
   testAIProvider: (provider: string) =>
     fetchJson<{ ok: boolean; model?: string; actualModel?: string; latencyMs?: number; sample?: string; usage?: { inputTokens: number; outputTokens: number }; error?: string }>(`/ai/test/${provider}`, { method: "POST" }),
+
+  // AI secrets — UI-managed, encrypted at rest
+  listAISecrets: () =>
+    fetchJson<{
+      canSave: boolean;
+      secrets: Array<{ name: string; configured: boolean; source: "db" | "env" | null; lastFour: string | null; updatedAt: string | null }>;
+    }>("/ai/secrets"),
+  saveAISecret: (name: string, value: string) =>
+    fetchJson<{ ok: boolean; status?: { name: string; lastFour: string; updatedAt: string }; error?: string }>(`/ai/secrets/${name}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+  deleteAISecret: (name: string) =>
+    fetchJson<{ ok: boolean }>(`/ai/secrets/${name}`, { method: "DELETE" }),
 };
 
 // Course tree response shape (from /courses/:id/tree)

@@ -29,6 +29,10 @@ export const env = {
   API_PORT: optionalNumber("API_PORT", 3001),
   LOG_LEVEL: optional("LOG_LEVEL", "info"),
 
+  /** Master key for encrypting UI-managed secrets. Optional but recommended;
+   *  without it, the Settings UI can only display env-set values, not save new ones. */
+  LP_SECRETS_KEY: optional("LP_SECRETS_KEY", ""),
+
   S3_ENDPOINT: optional("S3_ENDPOINT", "http://localhost:9000"),
   S3_REGION: optional("S3_REGION", "us-east-1"),
   S3_BUCKET: optional("S3_BUCKET", "learning-platform-dev"),

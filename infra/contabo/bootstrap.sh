@@ -54,12 +54,14 @@ if [ ! -f .env.prod ]; then
   MINIO_ROOT_PW=$(openssl rand -hex 24)
   S3_ACCESS=$(openssl rand -hex 12)
   S3_SECRET=$(openssl rand -hex 24)
+  LP_SECRETS=$(openssl rand -hex 32)
   cat > .env.prod <<ENV
 POSTGRES_PASSWORD=$POSTGRES_PW
 MINIO_ROOT_USER=lp_admin
 MINIO_ROOT_PASSWORD=$MINIO_ROOT_PW
 LOG_LEVEL=info
 API_PORT=3001
+LP_SECRETS_KEY=$LP_SECRETS
 S3_REGION=us-east-1
 S3_BUCKET=learning-platform
 S3_ACCESS_KEY=$S3_ACCESS
@@ -84,6 +86,12 @@ ENV
   ok ".env.prod created (secrets are random — view with: cat $APP_DIR/.env.prod)"
 else
   ok ".env.prod already exists — keeping existing secrets"
+  # Back-fill LP_SECRETS_KEY for older installs that pre-date the UI secrets manager.
+  if ! grep -q '^LP_SECRETS_KEY=' .env.prod; then
+    LP_SECRETS=$(openssl rand -hex 32)
+    echo "LP_SECRETS_KEY=$LP_SECRETS" >> .env.prod
+    ok "added LP_SECRETS_KEY to existing .env.prod (32 random bytes — back up this file)"
+  fi
 fi
 
 # ── 4. Build + start ────────────────────────────────────────────────

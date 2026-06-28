@@ -30,73 +30,143 @@ export default function SettingsPage() {
 // ─── AI Providers ────────────────────────────────────────────────────
 
 function AIProvidersCard() {
-  const { data, isLoading } = useSWR("ai-providers", () => api.listAIProviders());
+  const providers = useSWR("ai-providers", () => api.listAIProviders());
+  const secrets   = useSWR("ai-secrets",   () => api.listAISecrets());
+  const canSave = secrets.data?.canSave ?? false;
+
+  const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [testing, setTesting] = useState<Record<string, "idle" | "running" | "ok" | "fail">>({});
   const [results, setResults] = useState<Record<string, { latencyMs?: number; sample?: string; actualModel?: string; error?: string }>>({});
 
-  async function runTest(id: string) {
-    setTesting((s) => ({ ...s, [id]: "running" }));
+  function setInput(name: string, value: string) {
+    setInputs((s) => ({ ...s, [name]: value }));
+  }
+
+  async function save(secretName: string) {
+    const value = inputs[secretName]?.trim();
+    if (!value) return;
+    setSaving((s) => ({ ...s, [secretName]: true }));
     try {
-      const r = await api.testAIProvider(id);
-      setTesting((s) => ({ ...s, [id]: r.ok ? "ok" : "fail" }));
-      setResults((s) => ({ ...s, [id]: { latencyMs: r.latencyMs, sample: r.sample, actualModel: r.actualModel, error: r.error } }));
+      const r = await api.saveAISecret(secretName, value);
+      if (!r.ok) throw new Error(r.error ?? "save failed");
+      setInputs((s) => ({ ...s, [secretName]: "" }));
+      await Promise.all([providers.mutate(), secrets.mutate()]);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setTesting((s) => ({ ...s, [id]: "fail" }));
-      setResults((s) => ({ ...s, [id]: { error: msg } }));
+      window.alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving((s) => ({ ...s, [secretName]: false }));
     }
   }
+
+  async function clear(secretName: string) {
+    if (!window.confirm(`Clear stored ${secretName}? The env-var fallback (if set) will take effect.`)) return;
+    await api.deleteAISecret(secretName);
+    await Promise.all([providers.mutate(), secrets.mutate()]);
+  }
+
+  async function runTest(providerId: string) {
+    setTesting((s) => ({ ...s, [providerId]: "running" }));
+    try {
+      const r = await api.testAIProvider(providerId);
+      setTesting((s) => ({ ...s, [providerId]: r.ok ? "ok" : "fail" }));
+      setResults((s) => ({ ...s, [providerId]: { latencyMs: r.latencyMs, sample: r.sample, actualModel: r.actualModel, error: r.error } }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTesting((s) => ({ ...s, [providerId]: "fail" }));
+      setResults((s) => ({ ...s, [providerId]: { error: msg } }));
+    }
+  }
+
+  const secretByName = new Map((secrets.data?.secrets ?? []).map((s) => [s.name, s]));
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>AI providers</CardTitle>
         <CardDescription>
-          Configure API keys in <code className="text-xs">.env.prod</code> on the VPS and redeploy. This panel shows current status and lets you verify each key works.
+          Paste keys below to save them encrypted. Stored keys win over <code className="text-xs">.env.prod</code> values
+          {!canSave && (
+            <span className="block mt-2 text-[var(--color-accent-2)]">
+              ⚠️ <code>LP_SECRETS_KEY</code> isn&apos;t set on the server — saving is disabled. Run <code>bash learning-platform/infra/contabo/bootstrap.sh</code> once to auto-generate it.
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading && <p className="text-sm text-[var(--color-muted)]">Loading…</p>}
+        {providers.isLoading && <p className="text-sm text-[var(--color-muted)]">Loading…</p>}
         <ul className="divide-y divide-[var(--color-border)]">
-          {data?.providers.map((p) => {
+          {providers.data?.providers.map((p) => {
+            const secret = secretByName.get(p.secretName);
             const state = testing[p.id] ?? "idle";
             const res = results[p.id];
+            const inputValue = inputs[p.secretName] ?? "";
+            const isSaving = saving[p.secretName] ?? false;
+
             return (
-              <li key={p.id} className="py-3 flex items-start gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{p.displayName}</span>
-                    {p.configured
-                      ? <Badge variant="accent">configured</Badge>
-                      : <Badge variant="muted">not set</Badge>}
-                    {state === "ok"   && <Badge variant="default">✓ key works</Badge>}
-                    {state === "fail" && <Badge variant="accent2">✗ test failed</Badge>}
+              <li key={p.id} className="py-4 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium">{p.displayName}</span>
+                  {p.configured
+                    ? <Badge variant="accent">configured</Badge>
+                    : <Badge variant="muted">not set</Badge>}
+                  {secret?.source === "db"  && <Badge variant="outline">stored in app</Badge>}
+                  {secret?.source === "env" && <Badge variant="outline">from .env</Badge>}
+                  {state === "ok"   && <Badge variant="default">✓ key works</Badge>}
+                  {state === "fail" && <Badge variant="accent2">✗ test failed</Badge>}
+                  <span className="ml-auto text-xs text-[var(--color-muted)]">
+                    {p.pricing} ·{" "}
+                    <a href={p.signupUrl} target="_blank" rel="noreferrer" className="text-[var(--color-accent)] hover:underline">
+                      Get a key
+                    </a>
+                  </span>
+                </div>
+
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Label htmlFor={`key-${p.id}`} className="text-xs">
+                      {secret?.source === "db" && secret.lastFour
+                        ? <>Stored key: <code>●●●●●●●●{secret.lastFour}</code> · Replace it below</>
+                        : secret?.source === "env"
+                        ? <>Set via <code>{p.envKey}</code> in <code>.env.prod</code>. Save below to override.</>
+                        : <>Paste your <code>{p.envKey}</code></>}
+                    </Label>
+                    <Input
+                      id={`key-${p.id}`}
+                      type="password"
+                      placeholder={p.id === "anthropic" ? "sk-ant-..." : p.id === "local" ? "http://gpu-host:8000/v1" : "sk-..."}
+                      value={inputValue}
+                      onChange={(e) => setInput(p.secretName, e.target.value)}
+                      disabled={!canSave}
+                      autoComplete="off"
+                    />
                   </div>
-                  <p className="text-xs text-[var(--color-muted)] mt-1">
-                    env var: <code>{p.envKey}</code> · pricing: {p.pricing}
-                  </p>
-                  {!p.configured && (
-                    <p className="text-xs mt-1">
-                      <a href={p.signupUrl} target="_blank" rel="noreferrer" className="text-[var(--color-accent)] hover:underline">
-                        Get an API key →
-                      </a>
-                    </p>
+                  <Button onClick={() => save(p.secretName)} disabled={!canSave || !inputValue.trim() || isSaving}>
+                    {isSaving ? "Saving…" : "Save"}
+                  </Button>
+                  {p.configured && (
+                    <Button variant="secondary" onClick={() => runTest(p.id)} disabled={state === "running"}>
+                      {state === "running" ? "Testing…" : "Test"}
+                    </Button>
                   )}
-                  {res?.error && <p className="text-xs text-[var(--color-accent-2)] mt-2">Error: {res.error}</p>}
-                  {res?.sample && state === "ok" && (
-                    <p className="text-xs text-[var(--color-muted)] mt-2">
-                      Latency: {res.latencyMs}ms · Model returned: <code>{res.actualModel}</code> · Sample: <span className="italic">&ldquo;{res.sample}&rdquo;</span>
-                    </p>
+                  {secret?.source === "db" && (
+                    <Button variant="ghost" onClick={() => clear(p.secretName)}>Clear</Button>
                   )}
                 </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={!p.configured || state === "running"}
-                  onClick={() => runTest(p.id)}
-                >
-                  {state === "running" ? "Testing…" : "Test"}
-                </Button>
+
+                {secret?.source === "db" && secret.updatedAt && (
+                  <p className="text-xs text-[var(--color-muted)]">
+                    Last saved: {new Date(secret.updatedAt).toLocaleString()}
+                  </p>
+                )}
+                {res?.error && state === "fail" && (
+                  <p className="text-xs text-[var(--color-accent-2)]">Error: {res.error}</p>
+                )}
+                {res?.sample && state === "ok" && (
+                  <p className="text-xs text-[var(--color-muted)]">
+                    Latency: {res.latencyMs}ms · Model returned: <code>{res.actualModel}</code> · Sample: <span className="italic">&ldquo;{res.sample}&rdquo;</span>
+                  </p>
+                )}
               </li>
             );
           })}
@@ -116,8 +186,8 @@ function AIProfilesCard() {
       <CardHeader>
         <CardTitle>Active profile routing</CardTitle>
         <CardDescription>
-          Each task type (author, reviewer, etc.) routes to the first available provider in its preferred chain. Edit{" "}
-          <code className="text-xs">packages/ai-provider/src/profiles.ts</code> to change models or preferences.
+          Each task type routes to the first available provider in its preferred chain. Edit{" "}
+          <code className="text-xs">packages/ai-provider/src/profiles.ts</code> to change preferences or models.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -156,7 +226,7 @@ function AIProfilesCard() {
   );
 }
 
-// ─── Notifications (unchanged from before) ───────────────────────────
+// ─── Notifications + Branding (unchanged) ────────────────────────────
 
 interface NotificationPrefs {
   inApp: boolean;

@@ -168,6 +168,25 @@ export const learningEvents = pgTable("learning_events", {
   beatTsIdx: index("le_beat_ts_idx").on(t.beatId, t.ts),
 }));
 
+// ─── App secrets (UI-managed, encrypted at rest) ────────────────────
+
+/**
+ * App-managed secrets (API keys, etc.) edited from the Settings UI.
+ * Encrypted with AES-256-GCM using the master key in env LP_SECRETS_KEY.
+ * The plaintext NEVER hits the DB. lastFour is shown in the UI so the
+ * operator can recognize which key is stored without leaking it.
+ */
+export const appSecrets = pgTable("app_secrets", {
+  /** Stable id, e.g. "anthropic_api_key", "openai_api_key". */
+  name: text("name").primaryKey(),
+  ciphertextB64: text("ciphertext_b64").notNull(),
+  ivB64: text("iv_b64").notNull(),
+  authTagB64: text("auth_tag_b64").notNull(),
+  /** Last 4 chars of the plaintext, kept so the UI can show "●●●●1234". */
+  lastFour: text("last_four").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ─── Style library (Hermes feeds this; P3) ──────────────────────────
 
 export const styles = pgTable("styles", {
