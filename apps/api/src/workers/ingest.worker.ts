@@ -2,18 +2,9 @@
  * Ingest worker — consumes an uploaded course material and writes a course
  * outline (sections → modules → lessons → beats) into the DB.
  *
- * Pipeline:
- *   1. Fetch material row
- *   2. Download file from S3
- *   3. Extract text (currently PDF only; DOCX/MD can join later)
- *   4. Cache extractedText so re-ingesting doesn't re-parse
- *   5. Ask AI (ingest profile) for a structured outline
- *   6. Validate the response shape with Zod
- *   7. Update course meta + insert the whole tree in DB
- *   8. Mark material ingested
- *
- * Beats land in stage "ingested" (script-only, no HTML yet). The author worker
- * will pick them up from there — wiring for that comes in Task 2.
+ * Writes a row to `jobs` so the UI can show step-by-step progress and any
+ * error message inline. Every step also logs to stdout for SSH-side
+ * debugging.
  */
 
 import { Worker } from "bullmq";
@@ -118,104 +109,142 @@ export function startIngestWorker() {
     const { courseId, materialId } = job.data;
     console.log(`[ingest] start material=${materialId} course=${courseId}`);
 
-    const material = await db.query.materials.findFirst({ where: eq(tables.materials.id, materialId) });
-    if (!material) throw new Error(`Material ${materialId} not found`);
+    // Create a jobs row so the UI can show live status.
+    const [jobRow] = await db.insert(tables.jobs).values({
+      queue: "ingest",
+      materialId,
+      status: "running",
+      progressNote: "starting",
+      startedAt: new Date(),
+    }).returning();
+    const jobId = jobRow!.id;
 
-    // 1. Extract text (cached on the material row after first ingest)
-    let text = material.extractedText ?? "";
-    if (!text) {
-      console.log(`[ingest] downloading ${material.s3Key}`);
-      const obj = await s3.getObject(material.s3Key);
-      const lower = material.filename.toLowerCase();
-      if (lower.endsWith(".pdf") || material.mimeType === "application/pdf") {
-        console.log(`[ingest] parsing PDF (${(obj.size / 1024).toFixed(0)} KB)`);
-        const parsed = await pdfParse(Buffer.from(obj.body));
-        text = parsed.text;
-      } else if (lower.endsWith(".md") || lower.endsWith(".txt") || material.mimeType.startsWith("text/")) {
-        text = new TextDecoder().decode(obj.body);
-      } else {
-        throw new Error(`Unsupported material type: ${material.mimeType} (${material.filename}). PDF / MD / TXT only for now.`);
+    async function note(text: string) {
+      console.log(`[ingest:${jobId.slice(0, 8)}] ${text}`);
+      await db.update(tables.jobs).set({ progressNote: text }).where(eq(tables.jobs.id, jobId));
+    }
+    async function fail(err: unknown): Promise<never> {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[ingest:${jobId.slice(0, 8)}] FAILED:`, msg);
+      await db.update(tables.jobs).set({
+        status: "failed",
+        progressNote: "failed",
+        errorMessage: msg.slice(0, 2000),
+        endedAt: new Date(),
+      }).where(eq(tables.jobs.id, jobId));
+      throw err;
+    }
+
+    try {
+      const material = await db.query.materials.findFirst({ where: eq(tables.materials.id, materialId) });
+      if (!material) return await fail(new Error(`Material ${materialId} not found`));
+
+      // 1. Extract text (cached on the material row after first ingest)
+      let text = material.extractedText ?? "";
+      if (!text) {
+        await note(`downloading ${material.filename} from storage`);
+        const obj = await s3.getObject(material.s3Key);
+        const lower = material.filename.toLowerCase();
+        if (lower.endsWith(".pdf") || material.mimeType === "application/pdf") {
+          await note(`extracting text from PDF (${(obj.size / 1024).toFixed(0)} KB)`);
+          const parsed = await pdfParse(Buffer.from(obj.body));
+          text = parsed.text;
+        } else if (lower.endsWith(".md") || lower.endsWith(".txt") || material.mimeType.startsWith("text/")) {
+          text = new TextDecoder().decode(obj.body);
+        } else {
+          return await fail(new Error(`Unsupported material type: ${material.mimeType} (${material.filename}). PDF / MD / TXT only.`));
+        }
+        await note(`extracted ${text.length.toLocaleString()} chars · caching`);
+        await db.update(tables.materials).set({ extractedText: text }).where(eq(tables.materials.id, materialId));
       }
-      console.log(`[ingest] extracted ${text.length.toLocaleString()} chars`);
-      await db.update(tables.materials).set({ extractedText: text }).where(eq(tables.materials.id, materialId));
-    }
 
-    if (text.length > MAX_TEXT_CHARS) {
-      console.warn(`[ingest] truncating ${text.length.toLocaleString()} -> ${MAX_TEXT_CHARS.toLocaleString()} chars`);
-      text = text.slice(0, MAX_TEXT_CHARS);
-    }
-    if (text.trim().length < 200) {
-      throw new Error(`Material ${materialId} has only ${text.trim().length} chars of text — refusing to ingest empty content.`);
-    }
+      if (text.length > MAX_TEXT_CHARS) {
+        await note(`truncating ${text.length.toLocaleString()} -> ${MAX_TEXT_CHARS.toLocaleString()} chars`);
+        text = text.slice(0, MAX_TEXT_CHARS);
+      }
+      if (text.trim().length < 200) {
+        return await fail(new Error(`Only ${text.trim().length} chars of text extracted — refusing to ingest empty content.`));
+      }
 
-    // 2. Call AI
-    console.log(`[ingest] calling AI (ingest profile)`);
-    const client = await getAIClient();
-    const ai = await client.chat("ingest", {
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Document filename: ${material.filename}\n\n--- BEGIN DOCUMENT TEXT ---\n${text}\n--- END DOCUMENT TEXT ---` },
-      ],
-      jsonMode: true,
-    });
-    console.log(`[ingest] AI returned ${ai.text.length} chars (in=${ai.usage.inputTokens} out=${ai.usage.outputTokens})`);
+      // 2. Call AI
+      await note(`calling Claude ingest profile (${text.length.toLocaleString()} input chars)`);
+      const client = await getAIClient();
+      const ai = await client.chat("ingest", {
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Document filename: ${material.filename}\n\n--- BEGIN DOCUMENT TEXT ---\n${text}\n--- END DOCUMENT TEXT ---` },
+        ],
+        jsonMode: true,
+      });
+      await note(`AI returned ${ai.text.length} chars (in=${ai.usage.inputTokens} out=${ai.usage.outputTokens})`);
 
-    // 3. Parse + validate
-    const outline = parseOutline(ai.text);
+      // 3. Parse + validate
+      await note(`parsing + validating outline`);
+      const outline = parseOutline(ai.text);
 
-    // 4. Persist tree (transactional). drizzle-orm/postgres-js exposes a callback-style tx.
-    await db.transaction(async (tx) => {
-      await tx.update(tables.courses)
-        .set({ title: outline.courseTitle, summary: outline.courseSummary, updatedAt: new Date() })
-        .where(eq(tables.courses.id, courseId));
+      // 4. Persist tree (transactional)
+      const totals = countTotals(outline);
+      await note(`writing ${totals.sections} sections, ${totals.modules} modules, ${totals.lessons} lessons, ${totals.beats} beats`);
+      await db.transaction(async (tx) => {
+        await tx.update(tables.courses)
+          .set({ title: outline.courseTitle, summary: outline.courseSummary, updatedAt: new Date() })
+          .where(eq(tables.courses.id, courseId));
 
-      let sectionOrder = 0;
-      for (const s of outline.sections) {
-        const [section] = await tx.insert(tables.sections).values({
-          courseId, title: s.title, order: sectionOrder++,
-        }).returning();
-
-        let moduleOrder = 0;
-        for (const m of s.modules) {
-          const [module] = await tx.insert(tables.modules).values({
-            sectionId: section!.id, title: m.title, order: moduleOrder++,
+        let sectionOrder = 0;
+        for (const s of outline.sections) {
+          const [section] = await tx.insert(tables.sections).values({
+            courseId, title: s.title, order: sectionOrder++,
           }).returning();
 
-          let lessonOrder = 0;
-          for (const l of m.lessons) {
-            const [lesson] = await tx.insert(tables.lessons).values({
-              moduleId: module!.id, title: l.title, summary: l.summary, order: lessonOrder++,
+          let moduleOrder = 0;
+          for (const m of s.modules) {
+            const [module] = await tx.insert(tables.modules).values({
+              sectionId: section!.id, title: m.title, order: moduleOrder++,
             }).returning();
 
-            const beatValues = l.beats.map((b, i) => ({
-              lessonId: lesson!.id,
-              beatKey: b.beatKey,
-              beatType: b.beatType,
-              order: i,
-              stage: "ingested" as const,
-              status: "pending" as const,
-              script: b.script,
-              conceptsTaught: [] as string[],
-              conceptsRequired: [] as string[],
-            }));
-            if (beatValues.length) await tx.insert(tables.beats).values(beatValues);
+            let lessonOrder = 0;
+            for (const l of m.lessons) {
+              const [lesson] = await tx.insert(tables.lessons).values({
+                moduleId: module!.id, title: l.title, summary: l.summary, order: lessonOrder++,
+              }).returning();
+
+              const beatValues = l.beats.map((b, i) => ({
+                lessonId: lesson!.id,
+                beatKey: b.beatKey,
+                beatType: b.beatType,
+                order: i,
+                stage: "ingested" as const,
+                status: "pending" as const,
+                script: b.script,
+                conceptsTaught: [] as string[],
+                conceptsRequired: [] as string[],
+              }));
+              if (beatValues.length) await tx.insert(tables.beats).values(beatValues);
+            }
           }
         }
-      }
-    });
+      });
 
-    await db.update(tables.materials).set({ ingestedAt: new Date() }).where(eq(tables.materials.id, materialId));
+      await db.update(tables.materials).set({ ingestedAt: new Date() }).where(eq(tables.materials.id, materialId));
 
-    const totals = countTotals(outline);
-    console.log(`[ingest] DONE material=${materialId} sections=${totals.sections} modules=${totals.modules} lessons=${totals.lessons} beats=${totals.beats}`);
-    return totals;
+      await db.update(tables.jobs).set({
+        status: "succeeded",
+        progressNote: `done · ${totals.sections} sections · ${totals.modules} modules · ${totals.lessons} lessons · ${totals.beats} beats`,
+        endedAt: new Date(),
+      }).where(eq(tables.jobs.id, jobId));
+
+      console.log(`[ingest] DONE material=${materialId} sections=${totals.sections} modules=${totals.modules} lessons=${totals.lessons} beats=${totals.beats}`);
+      return totals;
+    } catch (err) {
+      // Re-throw via fail() so the jobs row is marked failed before BullMQ marks the job as failed too.
+      return await fail(err);
+    }
   }, { connection: workerConnection, concurrency: 2 });
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function parseOutline(raw: string): Outline {
-  // Some models wrap JSON in fences despite jsonMode — strip defensively.
   const cleaned = raw
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")

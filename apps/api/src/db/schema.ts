@@ -138,8 +138,12 @@ export const jobs = pgTable("jobs", {
   queue: text("queue").notNull(),
   beatId: uuid("beat_id").references(() => beats.id, { onDelete: "cascade" }),
   lessonId: uuid("lesson_id").references(() => lessons.id, { onDelete: "cascade" }),
+  /** For ingest jobs: which material is being processed. */
+  materialId: uuid("material_id").references(() => materials.id, { onDelete: "cascade" }),
   status: text("status").notNull(), // queued | running | succeeded | failed
   attempts: integer("attempts").default(0).notNull(),
+  /** Free-text human-readable progress note that workers update as they go. */
+  progressNote: text("progress_note"),
   /** When the worker picked it up, finished, etc. */
   startedAt: timestamp("started_at", { withTimezone: true }),
   endedAt: timestamp("ended_at", { withTimezone: true }),
@@ -149,6 +153,7 @@ export const jobs = pgTable("jobs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => ({
   beatIdx: index("jobs_beat_idx").on(t.beatId),
+  materialIdx: index("jobs_material_idx").on(t.materialId),
   queueStatusIdx: index("jobs_queue_status_idx").on(t.queue, t.status),
 }));
 

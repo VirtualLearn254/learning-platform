@@ -1,9 +1,43 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
 import { s3 } from "../lib/s3.js";
+
+/**
+ * For each material, fetch the most recent ingest job (status + progress note)
+ * so the UI can render live status without polling a separate endpoint.
+ */
+async function attachLatestJob<T extends { id: string }>(materials: T[]): Promise<Array<T & { latestJob: JobSummary | null }>> {
+  if (!materials.length) return [];
+  const ids = materials.map((m) => m.id);
+  const allJobs = await db.select().from(tables.jobs)
+    .where(and(eq(tables.jobs.queue, "ingest"), inArray(tables.jobs.materialId, ids)))
+    .orderBy(desc(tables.jobs.createdAt));
+  const latestByMaterial = new Map<string, JobSummary>();
+  for (const j of allJobs) {
+    if (!j.materialId || latestByMaterial.has(j.materialId)) continue;
+    latestByMaterial.set(j.materialId, {
+      id: j.id,
+      status: j.status,
+      progressNote: j.progressNote,
+      errorMessage: j.errorMessage,
+      startedAt: j.startedAt?.toISOString() ?? null,
+      endedAt: j.endedAt?.toISOString() ?? null,
+    });
+  }
+  return materials.map((m) => ({ ...m, latestJob: latestByMaterial.get(m.id) ?? null }));
+}
+
+interface JobSummary {
+  id: string;
+  status: string;
+  progressNote: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+}
 
 export const materialsRoute = new Hono()
   /**
@@ -57,14 +91,16 @@ export const materialsRoute = new Hono()
     const courseId = c.req.query("courseId");
     const where = courseId ? eq(tables.materials.courseId, courseId) : undefined;
     const rows = await db.select().from(tables.materials).where(where);
-    return c.json({ materials: rows });
+    const withJobs = await attachLatestJob(rows);
+    return c.json({ materials: withJobs });
   })
 
   .get("/:id", async (c) => {
     const id = c.req.param("id");
     const row = await db.query.materials.findFirst({ where: eq(tables.materials.id, id) });
     if (!row) return c.json({ error: "not_found" }, 404);
-    return c.json({ material: row });
+    const [withJob] = await attachLatestJob([row]);
+    return c.json({ material: withJob });
   })
 
   .post("/:id/ingest", async (c) => {

@@ -3,21 +3,50 @@
 import { use } from "react";
 import useSWR from "swr";
 
-import { api } from "@/lib/api";
+import { api, type JobSummary } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { CourseTree } from "@/components/course-tree";
 import { Skeleton } from "@/components/ui/skeleton";
+
+function JobStatusBadge({ job, ingestedAt }: { job: JobSummary | null; ingestedAt: string | null }) {
+  if (job?.status === "running")    return <Badge variant="accent">running</Badge>;
+  if (job?.status === "succeeded" || ingestedAt) return <Badge variant="default">✓ ingested</Badge>;
+  if (job?.status === "failed")     return <Badge variant="accent2">failed</Badge>;
+  if (job?.status === "queued")     return <Badge variant="muted">queued</Badge>;
+  return <Badge variant="muted">pending</Badge>;
+}
+
+function elapsed(startedAt: string | null): string {
+  if (!startedAt) return "";
+  const s = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+  return ` · ${s}s elapsed`;
+}
+
+function duration(startedAt: string | null, endedAt: string | null): string {
+  if (!startedAt || !endedAt) return "";
+  const s = Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000);
+  return ` · took ${s}s`;
+}
 
 export default function CourseDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: materialsData, mutate: refreshMaterials } = useSWR(
     `materials-${id}`,
     () => api.listMaterials(id),
-    // Poll while any material has no ingestedAt — ticks the UI live while ingest runs.
-    { refreshInterval: (latest) => latest?.materials.some((m) => !m.ingestedAt) ? 4000 : 0 },
+    // Poll fast (2s) while anything is queued/running; slower (10s) for "still pending" stragglers; off when all done.
+    {
+      refreshInterval: (latest) => {
+        if (!latest) return 2000;
+        const anyActive = latest.materials.some((m) => m.latestJob?.status === "queued" || m.latestJob?.status === "running");
+        if (anyActive) return 2000;
+        const anyUnprocessed = latest.materials.some((m) => !m.ingestedAt);
+        return anyUnprocessed ? 10000 : 0;
+      },
+    },
   );
   const { data: treeData, mutate: refreshTree } = useSWR(
     `course-tree-${id}`,
@@ -75,17 +104,37 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
                 <p className="text-sm text-[var(--color-muted)]">No materials uploaded yet.</p>
               ) : (
                 <ul className="divide-y divide-[var(--color-border)]">
-                  {materials.map((m) => (
-                    <li key={m.id} className="py-3 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{m.filename}</p>
-                        <p className="text-xs text-[var(--color-muted)]">
-                          {(m.sizeBytes / 1024).toFixed(1)} KB · {m.mimeType}
-                          {m.ingestedAt ? ` · ingested ${new Date(m.ingestedAt).toLocaleString()}` : " · pending ingest"}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
+                  {materials.map((m) => {
+                    const job = m.latestJob;
+                    return (
+                      <li key={m.id} className="py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium truncate">{m.filename}</p>
+                            <p className="text-xs text-[var(--color-muted)] mt-0.5">
+                              {(m.sizeBytes / 1024).toFixed(1)} KB · {m.mimeType}
+                            </p>
+                          </div>
+                          <JobStatusBadge job={job} ingestedAt={m.ingestedAt} />
+                        </div>
+                        {job?.status === "running" && job.progressNote && (
+                          <p className="text-xs text-[var(--color-accent)] mt-2 font-mono">
+                            ▸ {job.progressNote}{elapsed(job.startedAt)}
+                          </p>
+                        )}
+                        {job?.status === "succeeded" && job.progressNote && (
+                          <p className="text-xs text-[var(--color-muted)] mt-2">
+                            ✓ {job.progressNote}{duration(job.startedAt, job.endedAt)}
+                          </p>
+                        )}
+                        {job?.status === "failed" && job.errorMessage && (
+                          <p className="text-xs text-[var(--color-accent-2)] mt-2 break-words">
+                            ✗ {job.errorMessage}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </Card>

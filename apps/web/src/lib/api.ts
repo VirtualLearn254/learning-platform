@@ -55,9 +55,9 @@ export const api = {
 
   // Materials
   listMaterials: (courseId: string) =>
-    fetchJson<{ materials: Array<{ id: string; filename: string; mimeType: string; sizeBytes: number; ingestedAt: string | null; s3Key: string }> }>(`/materials?courseId=${courseId}`),
+    fetchJson<{ materials: Array<{ id: string; filename: string; mimeType: string; sizeBytes: number; ingestedAt: string | null; s3Key: string; latestJob: JobSummary | null }> }>(`/materials?courseId=${courseId}`),
   getMaterial: (id: string) =>
-    fetchJson<{ material: { id: string; courseId: string; filename: string; mimeType: string; sizeBytes: number; ingestedAt: string | null; uploadedAt: string; s3Key: string; extractedText: string | null } }>(`/materials/${id}`),
+    fetchJson<{ material: { id: string; courseId: string; filename: string; mimeType: string; sizeBytes: number; ingestedAt: string | null; uploadedAt: string; s3Key: string; extractedText: string | null; latestJob: JobSummary | null } }>(`/materials/${id}`),
   /** Direct multipart upload. Set triggerIngest=true to auto-queue ingest after upload. */
   uploadMaterial: async (input: { courseId: string; file: File; triggerIngest?: boolean }) => {
     const fd = new FormData();
@@ -165,3 +165,12 @@ export interface CourseTreeResponse extends Course {
 }
 
 export type { LearningEvent };
+
+export interface JobSummary {
+  id: string;
+  status: string; // queued | running | succeeded | failed
+  progressNote: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+}
