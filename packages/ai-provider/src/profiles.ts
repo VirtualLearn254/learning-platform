@@ -82,7 +82,8 @@ export const profiles = {
     supportsVision: true,
   },
 
-  /** Course-material ingestion: parse upload → modules/sections/lessons. */
+  /** Course-material ingestion: parse upload → modules/sections/lessons.
+   *  Output is structure-only (titles + beat outlines), so 8K is plenty. */
   ingest: {
     id: "ingest",
     preferred: ["anthropic", "local", "deepseek", "openai"],
@@ -93,7 +94,7 @@ export const profiles = {
       openai:   "gpt-4o",
     },
     temperature: 0.4,
-    maxTokens: 6000,
+    maxTokens: 8000,
   },
 
   /** Cheap classification / extraction tasks. */
