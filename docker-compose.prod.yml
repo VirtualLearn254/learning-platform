@@ -34,7 +34,9 @@ services:
     env_file: .env.prod
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://lp:${POSTGRES_PASSWORD:-changeme}@postgres:5432/learning_platform
+      # DATABASE_URL is composed at runtime in env.ts from POSTGRES_PASSWORD,
+      # which comes via env_file. Don't set it here — compose's ${VAR}
+      # interpolation doesn't read env_file and would silently fall back.
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
     depends_on:
@@ -54,7 +56,9 @@ services:
     env_file: .env.prod
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://lp:${POSTGRES_PASSWORD:-changeme}@postgres:5432/learning_platform
+      # DATABASE_URL is composed at runtime in env.ts from POSTGRES_PASSWORD,
+      # which comes via env_file. Don't set it here — compose's ${VAR}
+      # interpolation doesn't read env_file and would silently fall back.
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
     command: ["npx", "tsx", "apps/api/src/workers/index.ts"]
@@ -84,9 +88,12 @@ services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    # Load creds from .env.prod via env_file so they match what api/workers use.
+    # Compose's ${VAR} interpolation does NOT read env_file, so the old
+    # ${POSTGRES_PASSWORD:-changeme} pattern silently fell back to the default.
+    env_file: .env.prod
     environment:
       POSTGRES_USER: lp
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: learning_platform
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -114,9 +121,9 @@ services:
     image: minio/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lp_admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_strong}
+    # See note on postgres above: ${VAR} interpolation doesn't read env_file,
+    # so we load MINIO_ROOT_USER/PASSWORD from .env.prod directly.
+    env_file: .env.prod
     volumes:
       - minio_data:/data
     healthcheck:

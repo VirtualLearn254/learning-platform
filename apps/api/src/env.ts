@@ -10,6 +10,22 @@ function required(key: string): string {
   return v;
 }
 
+/**
+ * Resolve DATABASE_URL. If explicitly set, use it. Otherwise build it from
+ * POSTGRES_PASSWORD + reasonable defaults — this avoids docker-compose's
+ * ${VAR}-interpolation footgun (it doesn't read env_file).
+ */
+function resolveDatabaseUrl(): string {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  const pw = process.env.POSTGRES_PASSWORD;
+  if (!pw) throw new Error(`Missing required env: set DATABASE_URL, or set POSTGRES_PASSWORD so we can build one`);
+  const host = process.env.POSTGRES_HOST ?? "postgres";
+  const port = process.env.POSTGRES_PORT ?? "5432";
+  const user = process.env.POSTGRES_USER ?? "lp";
+  const db   = process.env.POSTGRES_DB   ?? "learning_platform";
+  return `postgres://${user}:${pw}@${host}:${port}/${db}`;
+}
+
 function optional(key: string, defaultValue: string): string {
   return process.env[key] ?? defaultValue;
 }
@@ -23,7 +39,7 @@ function optionalNumber(key: string, defaultValue: number): number {
 }
 
 export const env = {
-  DATABASE_URL: required("DATABASE_URL"),
+  DATABASE_URL: resolveDatabaseUrl(),
   REDIS_URL: optional("REDIS_URL", "redis://localhost:6379"),
 
   API_PORT: optionalNumber("API_PORT", 3001),
