@@ -1,0 +1,353 @@
+/**
+ * all-styles.css — visual theming for the 7 fresh HF-native styles.
+ *
+ * Each style is a `:root[data-style="..."]` block that sets CSS custom
+ * properties. Templates consume these properties (`var(--bg-base)`,
+ * `var(--font-display)`, etc.) so one template renders in any style.
+ *
+ * Conventions:
+ *   --bg-base / --bg-pattern / --bg-vignette      → backdrop layers
+ *   --text-display / --text-body / --text-caption → ink colors
+ *   --accent / --accent-secondary                  → emphasis colors
+ *   --font-display / --font-body / --font-accent   → typeface families
+ *   --size-hero / --size-h1 / .../--size-body      → type scale (px @ 1920×1080)
+ *   --surface-bg / --surface-border / --surface-radius → card treatment
+ *   --motion-stagger-ms / --motion-default-ms      → motion timing
+ */
+
+/* ────────────────────────────────────────────────────────────────────
+ * Shared base — applied to every style. Overridden per data-style.
+ * ──────────────────────────────────────────────────────────────────── */
+:root {
+  --bg-base: #0E0E10;
+  --bg-pattern: transparent;
+  --bg-vignette: rgba(0, 0, 0, 0.18);
+  --text-display: #FFFFFF;
+  --text-body: rgba(255, 255, 255, 0.85);
+  --text-caption: rgba(255, 255, 255, 0.55);
+  --text-emphasis: #FBBF24;
+  --accent: #FBBF24;
+  --accent-secondary: #34D399;
+  --accent-warning: #F87171;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-accent: "Inter", system-ui, sans-serif;
+  --size-hero: 152px;
+  --size-h1: 96px;
+  --size-h2: 56px;
+  --size-h3: 36px;
+  --size-body: 28px;
+  --size-caption: 20px;
+  --size-label: 14px;
+  --weight-display: 700;
+  --weight-body: 400;
+  --tracking-display: -0.02em;
+  --tracking-body: 0;
+  --tracking-label: 0.16em;
+  --surface-bg: rgba(255, 255, 255, 0.06);
+  --surface-border: 1px solid rgba(255, 255, 255, 0.12);
+  --surface-radius: 24px;
+  --surface-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  --motion-default-ms: 600;
+  --motion-stagger-ms: 120;
+  --pad-page: 96px;
+}
+
+body[data-style] {
+  background: var(--bg-base);
+  font-family: var(--font-body);
+  color: var(--text-body);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * kinetic-pop — jewel-tone gradient, bouncy hero, audio-reactive
+ * ──────────────────────────────────────────────────────────────────── */
+:root[data-style="kinetic-pop"] {
+  --bg-base: linear-gradient(135deg, #0F1226 0%, #27114D 50%, #581C87 100%);
+  --bg-vignette: rgba(0, 0, 0, 0.4);
+  --text-display: #FFFFFF;
+  --text-body: rgba(255, 255, 255, 0.88);
+  --text-caption: rgba(255, 255, 255, 0.6);
+  --accent: #FBBF24;
+  --accent-secondary: #F472B6;
+  --font-display: "Space Grotesk", "Inter", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --size-hero: 240px;
+  --size-h1: 120px;
+  --size-h2: 72px;
+  --size-body: 32px;
+  --weight-display: 800;
+  --tracking-display: -0.025em;
+  --surface-bg: rgba(255, 255, 255, 0.06);
+  --surface-border: 1px solid rgba(255, 255, 255, 0.12);
+  --surface-radius: 24px;
+  --motion-default-ms: 800;
+  --motion-stagger-ms: 80;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * swiss-grid — ivory on charcoal, strict, restrained
+ * ──────────────────────────────────────────────────────────────────── */
+:root[data-style="swiss-grid"] {
+  --bg-base: #0E0E10;
+  --bg-pattern: repeating-linear-gradient(to right, rgba(255,255,255,0.04) 0 1px, transparent 1px calc(100% / 12));
+  --bg-vignette: rgba(0, 0, 0, 0.18);
+  --text-display: #F2F2EE;
+  --text-body: rgba(242, 242, 238, 0.78);
+  --text-caption: rgba(242, 242, 238, 0.5);
+  --accent: #FB923C;
+  --accent-secondary: #84CC16;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-accent: "JetBrains Mono", monospace;
+  --size-hero: 144px;
+  --size-h1: 96px;
+  --size-h2: 56px;
+  --size-body: 28px;
+  --weight-display: 600;
+  --tracking-display: -0.025em;
+  --tracking-body: -0.01em;
+  --tracking-label: 0.14em;
+  --surface-bg: rgba(242, 242, 238, 0.03);
+  --surface-border: 1px solid rgba(242, 242, 238, 0.18);
+  --surface-radius: 0;
+  --motion-default-ms: 350;
+  --motion-stagger-ms: 60;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * warm-grain — cream paper, serif, dreamy
+ * ──────────────────────────────────────────────────────────────────── */
+:root[data-style="warm-grain"] {
+  --bg-base: linear-gradient(110deg, #F5EFE2 0%, #EFE5D2 100%);
+  --bg-vignette: rgba(60, 30, 10, 0.18);
+  --text-display: #3A2A1A;
+  --text-body: rgba(58, 42, 26, 0.78);
+  --text-caption: rgba(58, 42, 26, 0.5);
+  --accent: #A05A2C;
+  --accent-secondary: #5C8C3F;
+  --font-display: "Cormorant Garamond", "Georgia", serif;
+  --font-body: "Source Serif Pro", "Georgia", serif;
+  --font-accent: "Caveat", cursive;
+  --size-hero: 168px;
+  --size-h1: 112px;
+  --size-h2: 64px;
+  --size-body: 30px;
+  --weight-display: 500;
+  --tracking-display: -0.005em;
+  --tracking-body: 0;
+  --surface-bg: rgba(255, 250, 240, 0.92);
+  --surface-border: 1px solid rgba(58, 42, 26, 0.18);
+  --surface-radius: 4px;
+  --motion-default-ms: 1200;
+  --motion-stagger-ms: 200;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * liquid-glass — backlit frosted cards over animated violet gradient
+ * ──────────────────────────────────────────────────────────────────── */
+:root[data-style="liquid-glass"] {
+  --bg-base: linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);
+  --bg-pattern: radial-gradient(ellipse at top right, rgba(255,255,255,0.18) 0%, transparent 30%);
+  --bg-vignette: rgba(0, 0, 0, 0.2);
+  --text-display: #FFFFFF;
+  --text-body: rgba(255, 255, 255, 0.88);
+  --text-caption: rgba(255, 255, 255, 0.6);
+  --accent: #FBBF24;
+  --accent-secondary: #34D399;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --size-hero: 152px;
+  --size-h1: 96px;
+  --size-h2: 56px;
+  --size-body: 28px;
+  --weight-display: 600;
+  --tracking-display: -0.02em;
+  --surface-bg: rgba(255, 255, 255, 0.08);
+  --surface-border: 1px solid rgba(255, 255, 255, 0.18);
+  --surface-radius: 24px;
+  --motion-default-ms: 700;
+  --motion-stagger-ms: 100;
+}
+
+:root[data-style="liquid-glass"] .surface {
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * neon-grid — phosphor green on near-black, monospace, treble-reactive
+ * ──────────────────────────────────────────────────────────────────── */
+:root[data-style="neon-grid"] {
+  --bg-base: #080A12;
+  --bg-pattern:
+    linear-gradient(rgba(0,255,170,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,170,0.06) 1px, transparent 1px);
+  --bg-vignette: rgba(0, 5, 10, 0.32);
+  --text-display: #E6FFE9;
+  --text-body: rgba(230, 255, 233, 0.78);
+  --text-caption: rgba(230, 255, 233, 0.5);
+  --accent: #00FFAA;
+  --accent-secondary: #00E5FF;
+  --accent-warning: #FF2D9F;
+  --font-display: "JetBrains Mono", "Consolas", monospace;
+  --font-body: "JetBrains Mono", "Consolas", monospace;
+  --font-accent: "JetBrains Mono", "Consolas", monospace;
+  --size-hero: 128px;
+  --size-h1: 80px;
+  --size-h2: 48px;
+  --size-body: 26px;
+  --weight-display: 700;
+  --tracking-display: 0.02em;
+  --tracking-body: 0.01em;
+  --tracking-label: 0.18em;
+  --surface-bg: rgba(0, 255, 170, 0.04);
+  --surface-border: 1px solid #00FFAA;
+  --surface-radius: 2px;
+  --surface-shadow: 0 0 12px rgba(0, 255, 170, 0.4);
+  --motion-default-ms: 300;
+  --motion-stagger-ms: 70;
+}
+
+:root[data-style="neon-grid"] .emphasis {
+  color: var(--accent);
+  text-shadow: 0 0 16px rgba(0, 255, 170, 0.6);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * paper-mark — marker highlights over warm cream paper
+ * ──────────────────────────────────────────────────────────────────── */
+:root[data-style="paper-mark"] {
+  --bg-base: #F4ECDB;
+  --bg-pattern: radial-gradient(ellipse at 50% 70%, rgba(255,255,255,0.4) 0%, transparent 60%);
+  --bg-vignette: rgba(60, 40, 10, 0.14);
+  --text-display: #2A2418;
+  --text-body: rgba(42, 36, 24, 0.78);
+  --text-caption: rgba(42, 36, 24, 0.5);
+  --accent: #FFE066;
+  --accent-secondary: #E63946;
+  --font-display: "Caveat", "Comic Sans MS", cursive;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-accent: "Architects Daughter", cursive;
+  --size-hero: 192px;
+  --size-h1: 120px;
+  --size-h2: 64px;
+  --size-body: 32px;
+  --weight-display: 600;
+  --tracking-display: 0;
+  --surface-bg: rgba(255, 253, 248, 0.9);
+  --surface-border: 2px solid #2A2418;
+  --surface-radius: 8px;
+  --motion-default-ms: 500;
+  --motion-stagger-ms: 150;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * magnetic-flow — Figma-canvas dotted grid, smooth nodes + arrows
+ * ──────────────────────────────────────────────────────────────────── */
+:root[data-style="magnetic-flow"] {
+  --bg-base: #FAFAF7;
+  --bg-pattern: radial-gradient(circle at center, rgba(255,255,255,0.5) 0%, transparent 60%);
+  --bg-dot: radial-gradient(circle at 1px 1px, rgba(160, 160, 160, 0.18) 1px, transparent 1px);
+  --bg-vignette: rgba(0, 0, 0, 0.04);
+  --text-display: #1A1A1F;
+  --text-body: rgba(26, 26, 31, 0.72);
+  --text-caption: rgba(26, 26, 31, 0.5);
+  --accent: #FBBF24;
+  --accent-secondary: #34D399;
+  --accent-warning: #F87171;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-accent: "JetBrains Mono", monospace;
+  --size-hero: 88px;
+  --size-h1: 64px;
+  --size-h2: 40px;
+  --size-body: 22px;
+  --weight-display: 600;
+  --tracking-display: -0.015em;
+  --surface-bg: #FFFFFF;
+  --surface-border: 2px solid #1A1A1F;
+  --surface-radius: 12px;
+  --motion-default-ms: 500;
+  --motion-stagger-ms: 200;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * Layer helpers — used by all templates
+ * ──────────────────────────────────────────────────────────────────── */
+.backdrop {
+  position: absolute; inset: 0;
+  background: var(--bg-base);
+  z-index: 0;
+}
+.backdrop-pattern {
+  position: absolute; inset: 0;
+  background: var(--bg-pattern);
+  background-size: 32px 32px;
+  z-index: 1;
+  pointer-events: none;
+}
+.backdrop-vignette {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, transparent 60%, var(--bg-vignette) 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+.stage {
+  position: relative; z-index: 10;
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--pad-page);
+  box-sizing: border-box;
+  font-family: var(--font-body);
+  color: var(--text-body);
+}
+.surface {
+  background: var(--surface-bg);
+  border: var(--surface-border);
+  border-radius: var(--surface-radius);
+  box-shadow: var(--surface-shadow);
+}
+.eyebrow {
+  font-family: var(--font-accent);
+  font-size: var(--size-label);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.display {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-display);
+  color: var(--text-display);
+  line-height: 1.05;
+}
+.body-text {
+  font-family: var(--font-body);
+  font-size: var(--size-body);
+  font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-body);
+  color: var(--text-body);
+  line-height: 1.4;
+}
+.subtitle-pill {
+  position: absolute;
+  bottom: 7%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 14px 26px;
+  background: var(--surface-bg);
+  border: var(--surface-border);
+  border-radius: 16px;
+  font-family: var(--font-body);
+  font-size: 30px;
+  color: var(--text-display);
+  z-index: 50;
+  text-align: center;
+}
+.emphasis {
+  color: var(--accent);
+}

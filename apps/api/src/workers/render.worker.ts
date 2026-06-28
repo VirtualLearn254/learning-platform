@@ -24,7 +24,7 @@ import { workerConnection } from "./connection.js";
 import { s3 } from "../lib/s3.js";
 import { synthesize } from "../lib/tts.js";
 import { htmlToPng, assembleMp4 } from "../lib/render.js";
-import { buildBeatHtml } from "../lib/beat-html.js";
+import { buildBeatHtmlHF } from "../lib/hf-templates.js";
 
 interface JobData { beatId: string }
 
@@ -71,16 +71,15 @@ export function startRenderWorker() {
         stage: "rendering", status: "running", errorMessage: null, updatedAt: new Date(),
       }).where(eq(tables.beats.id, beatId));
 
-      // 1. Build HTML + screenshot
+      // 1. Build HTML + screenshot using ported HF templates + styles
       await note("rendering HTML to PNG");
-      const visual = (beat.visualSpec ?? {}) as { background?: string; onScreenText?: string[]; callouts?: string[] };
-      const html = buildBeatHtml({
+      const visual = (beat.visualSpec ?? {}) as { onScreenText?: string[]; callouts?: string[] };
+      const html = buildBeatHtmlHF({
         beatKey: beat.beatKey,
         beatType: beat.beatType,
         lessonTitle,
         onScreenText: visual.onScreenText ?? [],
         callouts: visual.callouts ?? [],
-        background: (visual.background as "solid" | "ai_image" | "stock_image") ?? "solid",
       });
       const png = await htmlToPng(html);
       await note(`PNG ${(png.length / 1024).toFixed(0)} KB`);
