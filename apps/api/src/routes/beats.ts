@@ -37,6 +37,13 @@ export const beatsRoute = new Hono()
     if (!beat) return c.json({ error: "not_found" }, 404);
     return c.json({ beat });
   })
+  .post("/:id/author", async (c) => {
+    const id = c.req.param("id");
+    const beat = await db.query.beats.findFirst({ where: eq(tables.beats.id, id) });
+    if (!beat) return c.json({ error: "not_found" }, 404);
+    const job = await queues.author.add("author-beat", { beatId: id, isRevision: false });
+    return c.json({ ok: true, jobId: job.id });
+  })
   .patch("/:id", zValidator("json", UpdateBeatSchema), async (c) => {
     const id = c.req.param("id");
     const input = c.req.valid("json");

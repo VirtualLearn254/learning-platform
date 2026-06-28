@@ -31,6 +31,8 @@ export const api = {
 
   // Lessons
   getLesson: (id: string) => fetchJson<{ lesson: Lesson; beats: Beat[] }>(`/lessons/${id}`),
+  authorLesson: (id: string, opts?: { all?: boolean }) =>
+    fetchJson<{ ok: boolean; queued?: number; jobIds?: string[]; message?: string; error?: string }>(`/lessons/${id}/author${opts?.all ? "?all=true" : ""}`, { method: "POST" }),
   stitchLesson: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/stitch`, { method: "POST" }),
   publishLesson: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/publish`, { method: "POST" }),
 
@@ -42,6 +44,7 @@ export const api = {
     return fetchJson<{ beats: Beat[] }>(`/beats${qs.toString() ? `?${qs}` : ""}`);
   },
   getBeat: (id: string) => fetchJson<{ beat: Beat }>(`/beats/${id}`),
+  authorBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/author`, { method: "POST" }),
   giveBeatFeedback: (id: string, input: { feedback: string; action: "approve" | "revise" | "reject"; screenshotKeys?: string[] }) =>
     fetchJson<{ ok: boolean; stage: BeatStage }>(`/beats/${id}/feedback`, { method: "POST", body: JSON.stringify(input) }),
   updateBeat: (id: string, patch: Partial<Beat>) =>

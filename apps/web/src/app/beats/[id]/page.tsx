@@ -4,9 +4,12 @@ import { use } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
+import { Wand2 } from "lucide-react";
+
 import { api } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { StageBadge } from "@/components/stage-badge";
 import { FeedbackForm } from "@/components/feedback-form";
 import { VideoPlayer } from "@/components/video-player";
@@ -42,7 +45,19 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
       <PageHeader
         title={beat.beatKey}
         description={`${beat.beatType} · revision ${beat.revisionCount} · stage:`}
-        actions={<StageBadge stage={beat.stage} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <StageBadge stage={beat.stage} />
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => { await api.authorBeat(id); await mutate(); }}
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              {beat.stage === "ingested" || beat.stage === "queued" ? "Author" : "Re-author"}
+            </Button>
+          </div>
+        }
       />
       <PageBody>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

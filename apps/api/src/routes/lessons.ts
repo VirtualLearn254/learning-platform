@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, inArray } from "drizzle-orm";
 
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
@@ -13,6 +13,30 @@ export const lessonsRoute = new Hono()
       .where(eq(tables.beats.lessonId, id))
       .orderBy(asc(tables.beats.order));
     return c.json({ lesson, beats });
+  })
+  .post("/:id/author", async (c) => {
+    /**
+     * Queue every beat in this lesson for authoring. By default, only beats
+     * still in "ingested" stage are queued (so you can re-run safely without
+     * clobbering already-authored beats). Pass ?all=true to re-author every
+     * beat from scratch.
+     */
+    const id = c.req.param("id");
+    const all = c.req.query("all") === "true";
+    const beats = await db.select().from(tables.beats)
+      .where(eq(tables.beats.lessonId, id))
+      .orderBy(asc(tables.beats.order));
+    if (beats.length === 0) return c.json({ ok: false, error: "no beats in lesson" }, 400);
+
+    const targets = all ? beats : beats.filter((b) => b.stage === "ingested" || b.stage === "queued");
+    if (targets.length === 0) return c.json({ ok: true, queued: 0, message: "no beats need authoring (pass ?all=true to re-author)" });
+
+    const jobIds: string[] = [];
+    for (const beat of targets) {
+      const job = await queues.author.add("author-beat", { beatId: beat.id, isRevision: false });
+      if (job.id) jobIds.push(job.id);
+    }
+    return c.json({ ok: true, queued: targets.length, jobIds });
   })
   .post("/:id/stitch", async (c) => {
     /** Manually trigger stitch (e.g. after a re-render fixes one beat). */
