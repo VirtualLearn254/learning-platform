@@ -10,7 +10,7 @@
 import { sql } from "drizzle-orm";
 import {
   pgTable, uuid, text, integer, boolean, jsonb, timestamp, bigserial,
-  pgEnum, index, primaryKey,
+  pgEnum, index, primaryKey, numeric,
 } from "drizzle-orm/pg-core";
 
 export const beatStageEnum = pgEnum("beat_stage", [
@@ -166,6 +166,53 @@ export const learningEvents = pgTable("learning_events", {
 }, (t) => ({
   courseTsIdx: index("le_course_ts_idx").on(t.courseId, t.ts),
   beatTsIdx: index("le_beat_ts_idx").on(t.beatId, t.ts),
+}));
+
+// ─── AI profile overrides (UI-editable model/provider per role) ─────
+
+/**
+ * Per-profile overrides on top of the TS defaults in
+ * packages/ai-provider/src/profiles.ts. If a row exists, it wins.
+ * If a column is null, the TS default still applies for that field.
+ */
+export const aiProfileOverrides = pgTable("ai_profile_overrides", {
+  /** e.g. "author", "reviewer". Matches profiles.ts keys. */
+  profileId: text("profile_id").primaryKey(),
+  preferredProvider: text("preferred_provider"),
+  modelId: text("model_id"),
+  /** Postgres numeric stays as string in JS for precision. */
+  temperature: numeric("temperature"),
+  maxTokens: integer("max_tokens"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ─── AI usage log (every chat/vision call) ──────────────────────────
+
+/**
+ * Append-only log of every AI call routed through @lp/ai-provider.
+ * Cost is computed at log time from the price catalog so future price
+ * changes don't retroactively change historical numbers.
+ */
+export const aiUsage = pgTable("ai_usage", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  ts: timestamp("ts", { withTimezone: true }).defaultNow().notNull(),
+  profileId: text("profile_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  modelId: text("model_id").notNull(),
+  inputTokens: integer("input_tokens").default(0).notNull(),
+  outputTokens: integer("output_tokens").default(0).notNull(),
+  /** Total $ for this call (input + output). Decimal stored as string. */
+  costUsd: numeric("cost_usd", { precision: 14, scale: 8 }).default("0").notNull(),
+  durationMs: integer("duration_ms").default(0).notNull(),
+  /** Optional beat / lesson attribution if the caller passed them. */
+  beatId: uuid("beat_id"),
+  lessonId: uuid("lesson_id"),
+  status: text("status").notNull(), // "ok" | "error"
+  errorMessage: text("error_message"),
+}, (t) => ({
+  tsIdx: index("ai_usage_ts_idx").on(t.ts),
+  profileTsIdx: index("ai_usage_profile_ts_idx").on(t.profileId, t.ts),
+  providerTsIdx: index("ai_usage_provider_ts_idx").on(t.providerId, t.ts),
 }));
 
 // ─── App secrets (UI-managed, encrypted at rest) ────────────────────

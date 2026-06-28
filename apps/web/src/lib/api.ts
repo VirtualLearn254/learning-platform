@@ -118,6 +118,26 @@ export const api = {
     }),
   deleteAISecret: (name: string) =>
     fetchJson<{ ok: boolean }>(`/ai/secrets/${name}`, { method: "DELETE" }),
+
+  // AI model catalog + role overrides
+  listAIModels: () =>
+    fetchJson<{ catalog: Record<"anthropic" | "openai" | "deepseek" | "local", Array<{ id: string; displayName: string; inputPer1M: number; outputPer1M: number; supportsVision?: boolean; speed?: string; tier?: string }>> }>("/ai/models"),
+  saveAIProfile: (id: string, patch: { preferredProvider?: string; modelId?: string; temperature?: number; maxTokens?: number }) =>
+    fetchJson<{ ok: boolean; error?: string }>(`/ai/profiles/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
+  resetAIProfile: (id: string) =>
+    fetchJson<{ ok: boolean }>(`/ai/profiles/${id}`, { method: "DELETE" }),
+
+  // AI usage analytics
+  getAIUsage: (window: "1h" | "24h" | "7d" | "30d") =>
+    fetchJson<{
+      window: string;
+      since: string;
+      totals: { calls: number; okCalls: number; errorCalls: number; inputTokens: number; outputTokens: number; costUsd: number; avgLatencyMs: number; avgCostUsd: number };
+      byProfile: Array<{ key: string; calls: number; inputTokens: number; outputTokens: number; costUsd: number; share: number }>;
+      byProvider: Array<{ key: string; calls: number; inputTokens: number; outputTokens: number; costUsd: number; share: number }>;
+      byModel: Array<{ key: string; calls: number; inputTokens: number; outputTokens: number; costUsd: number; share: number }>;
+      timeSeries: Array<{ bucket: string; calls: number; costUsd: number }>;
+    }>(`/ai/usage?window=${window}`),
 };
 
 // Course tree response shape (from /courses/:id/tree)
