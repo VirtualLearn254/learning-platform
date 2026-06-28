@@ -21,11 +21,13 @@ import { type AIProfile, type Profile, profiles } from "./profiles.js";
 import { type ChatRequest, type ChatResponse, type VisionRequest } from "./types.js";
 import { VllmProvider } from "./providers/vllm.js";
 import { OpenAIProvider } from "./providers/openai.js";
+import { AnthropicProvider } from "./providers/anthropic.js";
 
 export * from "./types.js";
 export * from "./profiles.js";
 
 export interface ProviderConfig {
+  anthropic?: { apiKey: string; baseUrl?: string };
   vllm?: { baseUrl: string; apiKey?: string };
   openai?: { apiKey: string };
   deepseek?: { apiKey: string };
@@ -42,19 +44,21 @@ export interface AIClient {
  * configured, we fall through to the next available one.
  */
 export function createAIClient(config: ProviderConfig): AIClient {
+  const anthropic = config.anthropic ? new AnthropicProvider(config.anthropic) : null;
   const vllm = config.vllm ? new VllmProvider(config.vllm) : null;
   const openai = config.openai ? new OpenAIProvider({ apiKey: config.openai.apiKey, baseUrl: "https://api.openai.com/v1" }) : null;
   const deepseek = config.deepseek ? new OpenAIProvider({ apiKey: config.deepseek.apiKey, baseUrl: "https://api.deepseek.com/v1" }) : null;
 
   function pickProvider(profile: AIProfile) {
     for (const preferred of profile.preferred) {
+      if (preferred === "anthropic" && anthropic) return { provider: anthropic, model: profile.modelByProvider.anthropic };
       if (preferred === "local" && vllm) return { provider: vllm, model: profile.modelByProvider.local };
       if (preferred === "openai" && openai) return { provider: openai, model: profile.modelByProvider.openai };
       if (preferred === "deepseek" && deepseek) return { provider: deepseek, model: profile.modelByProvider.deepseek };
     }
     throw new Error(
       `No configured provider for profile "${profile.id}". Preferred order: ${profile.preferred.join(", ")}. ` +
-      `Set VLLM_BASE_URL, OPENAI_API_KEY, or DEEPSEEK_API_KEY in your environment.`,
+      `Set ANTHROPIC_API_KEY, VLLM_BASE_URL, OPENAI_API_KEY, or DEEPSEEK_API_KEY in your environment.`,
     );
   }
 

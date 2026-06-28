@@ -20,6 +20,7 @@ import { filesRoute } from "./routes/files.js";
 import { jobsRoute } from "./routes/jobs.js";
 import { eventsRoute } from "./routes/events.js";
 import { conceptsRoute } from "./routes/concepts.js";
+import { aiRoute } from "./routes/ai.js";
 
 const app = new Hono();
 
@@ -43,6 +44,7 @@ app.route("/files",     filesRoute);
 app.route("/jobs",      jobsRoute);
 app.route("/events",    eventsRoute);
 app.route("/concepts",  conceptsRoute);
+app.route("/ai",        aiRoute);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 app.onError((err, c) => {

@@ -36,6 +36,8 @@ export const env = {
   S3_SECRET_KEY: optional("S3_SECRET_KEY", "lp_dev_password_minio"),
   S3_FORCE_PATH_STYLE: optional("S3_FORCE_PATH_STYLE", "true") === "true",
 
+  ANTHROPIC_API_KEY: optional("ANTHROPIC_API_KEY", ""),
+  ANTHROPIC_BASE_URL: optional("ANTHROPIC_BASE_URL", ""),
   VLLM_BASE_URL: optional("VLLM_BASE_URL", ""),
   VLLM_API_KEY: optional("VLLM_API_KEY", "vllm-local"),
   OPENAI_API_KEY: optional("OPENAI_API_KEY", ""),

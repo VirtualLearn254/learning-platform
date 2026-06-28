@@ -3,12 +3,10 @@
  * so the rest of the code can stay generic. Edit this file when you want to
  * swap models or change a preferred-provider chain.
  *
- * IMPORTANT: the model names here MUST match what's actually served by vLLM
- * on the GPU host (and what your API keys can access for cloud fallbacks).
- * If you change the vLLM model, update modelByProvider.local here.
+ * Model names MUST match what the chosen provider actually serves.
  */
 
-export type ProviderId = "local" | "openai" | "deepseek";
+export type ProviderId = "anthropic" | "local" | "openai" | "deepseek";
 
 export interface AIProfile {
   id: string;
@@ -30,8 +28,9 @@ export const profiles = {
   /** Generating beat HTML/CSS/JS. Highest quality demands. */
   author: {
     id: "author",
-    preferred: ["local", "deepseek", "openai"],
+    preferred: ["anthropic", "local", "openai", "deepseek"],
     modelByProvider: {
+      anthropic: "claude-sonnet-4-6",
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       openai:   "gpt-4o",
@@ -43,8 +42,9 @@ export const profiles = {
   /** Reviewing a beat for static issues. Quality-tolerant, cheap. */
   reviewer: {
     id: "reviewer",
-    preferred: ["local", "deepseek", "openai"],
+    preferred: ["anthropic", "local", "deepseek", "openai"],
     modelByProvider: {
+      anthropic: "claude-haiku-4-5-20251001",
       local:    "Qwen/Qwen2.5-14B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       openai:   "gpt-4o-mini",
@@ -53,11 +53,12 @@ export const profiles = {
     maxTokens: 2000,
   },
 
-  /** Holistic cross-beat review. One-shot per lesson. */
+  /** Holistic cross-beat review. One-shot per lesson. Splurge here. */
   holistic: {
     id: "holistic",
-    preferred: ["local", "openai", "deepseek"],
+    preferred: ["anthropic", "local", "openai", "deepseek"],
     modelByProvider: {
+      anthropic: "claude-opus-4-8",
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       openai:   "gpt-4o",
@@ -69,8 +70,9 @@ export const profiles = {
   /** Vision verifier — screenshot in, structured issues out. */
   verifier: {
     id: "verifier",
-    preferred: ["local", "openai"],
+    preferred: ["anthropic", "local", "openai"],
     modelByProvider: {
+      anthropic: "claude-sonnet-4-6",
       local:    "Qwen/Qwen2-VL-7B-Instruct",
       deepseek: "deepseek-chat",            // no vision; only here for the union
       openai:   "gpt-4o",
@@ -83,8 +85,9 @@ export const profiles = {
   /** Course-material ingestion: parse upload → modules/sections/lessons. */
   ingest: {
     id: "ingest",
-    preferred: ["local", "deepseek", "openai"],
+    preferred: ["anthropic", "local", "deepseek", "openai"],
     modelByProvider: {
+      anthropic: "claude-sonnet-4-6",
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       openai:   "gpt-4o",
@@ -96,8 +99,9 @@ export const profiles = {
   /** Cheap classification / extraction tasks. */
   utility: {
     id: "utility",
-    preferred: ["local", "deepseek", "openai"],
+    preferred: ["anthropic", "local", "deepseek", "openai"],
     modelByProvider: {
+      anthropic: "claude-haiku-4-5-20251001",
       local:    "Qwen/Qwen2.5-14B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       openai:   "gpt-4o-mini",

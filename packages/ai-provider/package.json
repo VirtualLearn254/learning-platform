@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
     "@lp/shared": "*",
     "openai": "^4.77.0"
   },
