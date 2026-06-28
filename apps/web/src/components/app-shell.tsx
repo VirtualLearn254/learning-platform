@@ -26,15 +26,16 @@ const NAV: NavItem[] = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
+      {/* ── Left nav: header pinned, link list scrolls, status pinned ── */}
       <aside className="w-60 bg-white border-r border-[var(--color-border)] flex flex-col">
-        <div className="px-6 py-6 border-b border-[var(--color-border)]">
+        <div className="shrink-0 px-6 py-6 border-b border-[var(--color-border)]">
           <Link href="/" className="text-lg font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
             learning-platform
           </Link>
           <p className="text-xs text-[var(--color-muted)] mt-1">internal · v0.1</p>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {NAV.map((item) => {
             const active = item.href === "/"
               ? pathname === "/"
@@ -56,11 +57,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="p-4 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)]">
+        <div className="shrink-0 p-4 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)]">
           Status: <span className="text-[var(--color-accent)]">scaffold</span>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-hidden">
+      {/* ── Main column: column-flex so PageHeader stays + PageBody scrolls ── */}
+      <main className="flex-1 flex flex-col overflow-hidden">
         {children}
       </main>
     </div>
@@ -69,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
-    <div className="px-12 py-8 border-b border-[var(--color-border)] flex items-end justify-between">
+    <div className="shrink-0 px-12 py-8 border-b border-[var(--color-border)] flex items-end justify-between">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
           {title}
@@ -82,5 +84,5 @@ export function PageHeader({ title, description, actions }: { title: string; des
 }
 
 export function PageBody({ children }: { children: ReactNode }) {
-  return <div className="p-12">{children}</div>;
+  return <div className="flex-1 overflow-y-auto overflow-x-hidden p-12">{children}</div>;
 }
