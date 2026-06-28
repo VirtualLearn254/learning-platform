@@ -48,12 +48,14 @@ cd "$APP_DIR"
 ok "repo at $(git rev-parse --short HEAD)"
 
 # ── 3. Generate .env.prod with random secrets if missing ────────────
+# The app's S3 client talks to MinIO over the internal docker network, so we
+# point S3_ACCESS_KEY/S3_SECRET_KEY at the MinIO ROOT credentials — that way
+# there's only one set of MinIO creds to manage. (For production with R2/AWS,
+# you'd replace S3_ENDPOINT + these keys with real cloud credentials.)
 if [ ! -f .env.prod ]; then
   log "generating .env.prod with random secrets"
   POSTGRES_PW=$(openssl rand -hex 24)
   MINIO_ROOT_PW=$(openssl rand -hex 24)
-  S3_ACCESS=$(openssl rand -hex 12)
-  S3_SECRET=$(openssl rand -hex 24)
   LP_SECRETS=$(openssl rand -hex 32)
   cat > .env.prod <<ENV
 POSTGRES_PASSWORD=$POSTGRES_PW
@@ -64,8 +66,8 @@ API_PORT=3001
 LP_SECRETS_KEY=$LP_SECRETS
 S3_REGION=us-east-1
 S3_BUCKET=learning-platform
-S3_ACCESS_KEY=$S3_ACCESS
-S3_SECRET_KEY=$S3_SECRET
+S3_ACCESS_KEY=lp_admin
+S3_SECRET_KEY=$MINIO_ROOT_PW
 S3_FORCE_PATH_STYLE=true
 ANTHROPIC_API_KEY=
 ANTHROPIC_BASE_URL=
@@ -91,6 +93,19 @@ else
     LP_SECRETS=$(openssl rand -hex 32)
     echo "LP_SECRETS_KEY=$LP_SECRETS" >> .env.prod
     ok "added LP_SECRETS_KEY to existing .env.prod (32 random bytes — back up this file)"
+  fi
+  # ALWAYS sync S3_ACCESS_KEY/S3_SECRET_KEY to MINIO_ROOT_USER/MINIO_ROOT_PASSWORD,
+  # because the random S3 creds the early bootstrap generated were never known
+  # to MinIO and silently broke uploads.
+  MINIO_USER=$(grep '^MINIO_ROOT_USER=' .env.prod | cut -d= -f2-)
+  MINIO_PW=$(grep '^MINIO_ROOT_PASSWORD=' .env.prod | cut -d= -f2-)
+  CURRENT_S3_KEY=$(grep '^S3_ACCESS_KEY=' .env.prod | cut -d= -f2- || echo "")
+  if [ -n "$MINIO_USER" ] && [ -n "$MINIO_PW" ] && [ "$CURRENT_S3_KEY" != "$MINIO_USER" ]; then
+    log "syncing S3_ACCESS_KEY / S3_SECRET_KEY to MinIO root credentials"
+    # Use a different delimiter for sed since secrets may contain /
+    sed -i "s|^S3_ACCESS_KEY=.*|S3_ACCESS_KEY=$MINIO_USER|" .env.prod
+    sed -i "s|^S3_SECRET_KEY=.*|S3_SECRET_KEY=$MINIO_PW|" .env.prod
+    ok "S3 credentials now match MinIO root"
   fi
 fi
 
