@@ -8,6 +8,9 @@
  */
 
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import OpenAI from "openai";
 
 import { getSecret } from "./secrets.js";
@@ -32,7 +35,10 @@ export async function synthesize(text: string, opts: TtsOptions = {}): Promise<T
   const key = await getSecret("openai_api_key");
   if (!key) throw new Error("OpenAI API key is not configured (set OPENAI_API_KEY or save it in Settings).");
 
-  const client = new OpenAI({ apiKey: key });
+  // 60s timeout on the API call; OpenAI TTS normally returns in 2-5s.
+  const client = new OpenAI({ apiKey: key, timeout: 60_000, maxRetries: 1 });
+  console.log(`[tts] requesting ${text.length} chars`);
+  const t0 = Date.now();
   const res = await client.audio.speech.create({
     model: opts.model ?? "tts-1",
     voice: opts.voice ?? "onyx",
@@ -40,31 +46,53 @@ export async function synthesize(text: string, opts: TtsOptions = {}): Promise<T
     speed: opts.speed ?? 0.95,
     response_format: "mp3",
   });
-  const audio = Buffer.from(await res.arrayBuffer());
-  const durationSec = await probeDuration(audio);
+  console.log(`[tts] response headers in ${Date.now() - t0}ms; reading body...`);
+  const buf = await withTimeout(res.arrayBuffer(), 30_000, "TTS body read");
+  const audio = Buffer.from(buf);
+  console.log(`[tts] body ${audio.length} bytes in ${Date.now() - t0}ms; probing duration...`);
+  const durationSec = await withTimeout(probeDuration(audio), 15_000, "ffprobe");
+  console.log(`[tts] duration ${durationSec.toFixed(2)}s · total ${Date.now() - t0}ms`);
   return { audio, durationSec };
 }
 
-/** Run ffprobe on raw MP3 bytes via stdin, return duration in seconds. */
-async function probeDuration(audio: Buffer): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const ff = spawn("ffprobe", [
-      "-v", "error",
-      "-show_entries", "format=duration",
-      "-of", "default=noprint_wrappers=1:nokey=1",
-      "-i", "-",
-    ]);
-    let out = "";
-    let err = "";
-    ff.stdout.on("data", (b) => { out += b.toString(); });
-    ff.stderr.on("data", (b) => { err += b.toString(); });
-    ff.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`ffprobe exited ${code}: ${err.slice(0, 200)}`));
-      const n = parseFloat(out.trim());
-      if (!isFinite(n)) return reject(new Error(`ffprobe returned non-number: ${out}`));
-      resolve(n);
-    });
-    ff.on("error", reject);
-    ff.stdin.end(audio);
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
   });
+}
+
+/**
+ * Probe MP3 duration via ffprobe. Writes to a temp file first because piping
+ * the buffer into ffprobe's stdin causes EPIPE: ffprobe closes stdin once it
+ * has read the format header, and any further write from us crashes the
+ * process (unrecoverably, in a Node EventEmitter).
+ */
+async function probeDuration(audio: Buffer): Promise<number> {
+  const dir = await mkdtemp(join(tmpdir(), "probe-"));
+  const path = join(dir, "audio.mp3");
+  try {
+    await writeFile(path, audio);
+    return await new Promise((resolve, reject) => {
+      const ff = spawn("ffprobe", [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        path,
+      ]);
+      let out = "";
+      let err = "";
+      ff.stdout.on("data", (b) => { out += b.toString(); });
+      ff.stderr.on("data", (b) => { err += b.toString(); });
+      ff.on("close", (code) => {
+        if (code !== 0) return reject(new Error(`ffprobe exited ${code}: ${err.slice(0, 200)}`));
+        const n = parseFloat(out.trim());
+        if (!isFinite(n)) return reject(new Error(`ffprobe returned non-number: ${out}`));
+        resolve(n);
+      });
+      ff.on("error", reject);
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }

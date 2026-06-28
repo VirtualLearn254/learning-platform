@@ -8,6 +8,16 @@
 
 import "dotenv/config";
 
+// Keep the workers process alive even if some stray async error fires.
+// Without this, an unhandled EPIPE or socket error inside a child process
+// callback would kill all 7 workers + stall their in-flight jobs.
+process.on("uncaughtException", (err) => {
+  console.error("[workers] uncaughtException (continuing):", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[workers] unhandledRejection (continuing):", reason);
+});
+
 import { startIngestWorker } from "./ingest.worker.js";
 import { startAuthorWorker } from "./author.worker.js";
 import { startAIReviewWorker } from "./ai-review.worker.js";
