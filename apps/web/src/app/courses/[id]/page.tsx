@@ -8,6 +8,7 @@ import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { CourseTree } from "@/components/course-tree";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -106,6 +107,7 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
                 <ul className="divide-y divide-[var(--color-border)]">
                   {materials.map((m) => {
                     const job = m.latestJob;
+                    const canRetry = !job || job.status === "failed" || (job.status !== "running" && job.status !== "queued" && !m.ingestedAt);
                     return (
                       <li key={m.id} className="py-3">
                         <div className="flex items-start justify-between gap-3">
@@ -115,7 +117,21 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
                               {(m.sizeBytes / 1024).toFixed(1)} KB · {m.mimeType}
                             </p>
                           </div>
-                          <JobStatusBadge job={job} ingestedAt={m.ingestedAt} />
+                          <div className="flex items-center gap-2">
+                            <JobStatusBadge job={job} ingestedAt={m.ingestedAt} />
+                            {canRetry && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={async () => {
+                                  await api.triggerIngest(m.id);
+                                  await refreshMaterials();
+                                }}
+                              >
+                                {job?.status === "failed" ? "Retry ingest" : "Run ingest"}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                         {job?.status === "running" && job.progressNote && (
                           <p className="text-xs text-[var(--color-accent)] mt-2 font-mono">
