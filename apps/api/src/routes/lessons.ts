@@ -40,6 +40,15 @@ export const lessonsRoute = new Hono()
     }
     return c.json({ ok: true, queued: targets.length, jobIds });
   })
+  .post("/:id/holistic-review", async (c) => {
+    /** Queue a cross-beat lesson review. Reads all main beats and asks Claude
+     *  holistic profile to flag narrative continuity / repetition / pacing issues. */
+    const id = c.req.param("id");
+    const lesson = await db.query.lessons.findFirst({ where: eq(tables.lessons.id, id) });
+    if (!lesson) return c.json({ error: "not_found" }, 404);
+    const job = await queues.holistic.add("holistic-review", { lessonId: id });
+    return c.json({ ok: true, jobId: job.id });
+  })
   .post("/:id/render", async (c) => {
     /**
      * Queue every approved-or-earlier beat in this lesson for render.

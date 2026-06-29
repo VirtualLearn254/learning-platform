@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import useSWR from "swr";
-import { Play, Download, Wand2, Film } from "lucide-react";
+import { Play, Download, Wand2, Film, Glasses } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
@@ -12,6 +12,7 @@ import { VideoPlayer } from "@/components/video-player";
 import { BeatCard } from "@/components/beat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { ReviewIssues } from "@/components/review-issues";
 import { useToast } from "@/lib/use-toast";
 
 export default function LessonDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +30,17 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
           : r.message ?? "Nothing to author",
         variant: "success",
       });
+      mutate();
+    } catch (e) {
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
+    }
+  }
+
+  async function holisticReview() {
+    try {
+      const r = await api.holisticReviewLesson(id);
+      if (!r.ok) throw new Error("failed");
+      notify({ title: "Holistic review queued — runs against Claude opus profile", variant: "success" });
       mutate();
     } catch (e) {
       notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
@@ -92,6 +104,11 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                 <Wand2 className="w-4 h-4" />Author {ingestedCount} beat{ingestedCount === 1 ? "" : "s"}
               </Button>
             )}
+            {authoredCount > 0 && (
+              <Button variant="secondary" onClick={holisticReview}>
+                <Glasses className="w-4 h-4" />Holistic review
+              </Button>
+            )}
             {renderableCount > 0 && (
               <Button onClick={() => renderAll(false)}>
                 <Film className="w-4 h-4" />Render {renderableCount} beat{renderableCount === 1 ? "" : "s"}
@@ -142,6 +159,18 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                   {renderedCount}/{mainBeats.length}
                 </span>
               </div>
+            </Card>
+          )}
+
+          {(lesson.holisticScore !== null || (lesson.holisticIssues && lesson.holisticIssues.length > 0)) && (
+            <Card className="p-6">
+              <h3 className="font-semibold mb-3">Holistic review</h3>
+              <ReviewIssues issues={lesson.holisticIssues} score={lesson.holisticScore} />
+              {lesson.holisticReviewedAt && (
+                <p className="text-xs text-[var(--color-muted)] mt-3">
+                  Reviewed {new Date(lesson.holisticReviewedAt).toLocaleString()}
+                </p>
+              )}
             </Card>
           )}
 

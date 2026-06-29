@@ -18,7 +18,8 @@ import { env } from "../env.js";
 export const QueueNames = {
   Ingest:     "ingest",      // course material → modules/sections/lessons/beats outline
   Author:     "author",      // generate beat HTML/CSS/JS
-  AIReview:   "ai_review",   // automated review pass
+  AIReview:   "ai_review",   // automated per-beat review pass
+  Holistic:   "holistic",    // cross-beat lesson review (post-author, pre-render gate)
   Render:     "render",      // hyperframes render → MP4
   Stitch:     "stitch",      // lesson-level: stitch all beats into master
   Audit:      "audit",       // post-stitch audit-toolkit pass
@@ -40,6 +41,7 @@ export const queues = {
   ingest: makeQueue<{ courseId: string; materialId: string }>(QueueNames.Ingest),
   author: makeQueue<{ beatId: string; isRevision: boolean }>(QueueNames.Author),
   aiReview: makeQueue<{ beatId: string }>(QueueNames.AIReview),
+  holistic: makeQueue<{ lessonId: string }>(QueueNames.Holistic),
   render: makeQueue<{ beatId: string }>(QueueNames.Render),
   stitch: makeQueue<{ lessonId: string }>(QueueNames.Stitch),
   audit: makeQueue<{ lessonId: string }>(QueueNames.Audit),

@@ -58,6 +58,9 @@ export interface Lesson {
   masterMp4Key: string | null;
   scormPackageKey: string | null;
   publishedAt: string | null;
+  holisticScore: number | null;
+  holisticIssues: ReviewIssue[] | null;
+  holisticReviewedAt: string | null;
 }
 
 export interface Beat {
@@ -80,8 +83,19 @@ export interface Beat {
   durationSeconds: number | null;
   revisionCount: number;
   errorMessage: string | null;
+  reviewScore: number | null;
+  reviewIssues: ReviewIssue[] | null;
+  reviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReviewIssue {
+  severity: "P0" | "P1" | "P2";
+  category: string;
+  description: string;
+  suggestion?: string;
+  affectedBeats?: string[];
 }
 
 export interface VoicePreference {

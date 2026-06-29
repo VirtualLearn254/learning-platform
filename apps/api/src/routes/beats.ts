@@ -53,6 +53,14 @@ export const beatsRoute = new Hono()
     const job = await queues.render.add("render-beat", { beatId: id });
     return c.json({ ok: true, jobId: job.id });
   })
+  .post("/:id/review", async (c) => {
+    /** Re-run the per-beat AI review. */
+    const id = c.req.param("id");
+    const beat = await db.query.beats.findFirst({ where: eq(tables.beats.id, id) });
+    if (!beat) return c.json({ error: "not_found" }, 404);
+    const job = await queues.aiReview.add("review-beat", { beatId: id });
+    return c.json({ ok: true, jobId: job.id });
+  })
   .patch("/:id", zValidator("json", UpdateBeatSchema), async (c) => {
     const id = c.req.param("id");
     const input = c.req.valid("json");

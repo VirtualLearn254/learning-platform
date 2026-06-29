@@ -21,6 +21,7 @@ process.on("unhandledRejection", (reason) => {
 import { startIngestWorker } from "./ingest.worker.js";
 import { startAuthorWorker } from "./author.worker.js";
 import { startAIReviewWorker } from "./ai-review.worker.js";
+import { startHolisticWorker } from "./holistic.worker.js";
 import { startRenderWorker } from "./render.worker.js";
 import { startStitchWorker } from "./stitch.worker.js";
 import { startAuditWorker } from "./audit.worker.js";
@@ -30,6 +31,7 @@ const workers = [
   startIngestWorker(),
   startAuthorWorker(),
   startAIReviewWorker(),
+  startHolisticWorker(),
   startRenderWorker(),
   startStitchWorker(),
   startAuditWorker(),

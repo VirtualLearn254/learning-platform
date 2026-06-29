@@ -33,6 +33,8 @@ export const api = {
   getLesson: (id: string) => fetchJson<{ lesson: Lesson; beats: Beat[]; breadcrumbs: Breadcrumb[] }>(`/lessons/${id}`),
   authorLesson: (id: string, opts?: { all?: boolean }) =>
     fetchJson<{ ok: boolean; queued?: number; jobIds?: string[]; message?: string; error?: string }>(`/lessons/${id}/author${opts?.all ? "?all=true" : ""}`, { method: "POST" }),
+  holisticReviewLesson: (id: string) =>
+    fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/holistic-review`, { method: "POST" }),
   renderLesson: (id: string, opts?: { all?: boolean }) =>
     fetchJson<{ ok: boolean; queued?: number; jobIds?: string[]; message?: string; error?: string }>(`/lessons/${id}/render${opts?.all ? "?all=true" : ""}`, { method: "POST" }),
   stitchLesson: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/stitch`, { method: "POST" }),
@@ -48,6 +50,7 @@ export const api = {
   getBeat: (id: string) => fetchJson<{ beat: Beat; breadcrumbs: Breadcrumb[] }>(`/beats/${id}`),
   authorBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/author`, { method: "POST" }),
   renderBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/render`, { method: "POST" }),
+  reviewBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/review`, { method: "POST" }),
   giveBeatFeedback: (id: string, input: { feedback: string; action: "approve" | "revise" | "reject"; screenshotKeys?: string[] }) =>
     fetchJson<{ ok: boolean; stage: BeatStage }>(`/beats/${id}/feedback`, { method: "POST", body: JSON.stringify(input) }),
   updateBeat: (id: string, patch: Partial<Beat>) =>

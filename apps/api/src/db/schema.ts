@@ -66,6 +66,12 @@ export const lessons = pgTable("lessons", {
   /** S3 key for the SCORM zip once published. */
   scormPackageKey: text("scorm_package_key"),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  /** Latest holistic-review score (0-100) for the lesson as a whole. */
+  holisticScore: integer("holistic_score"),
+  /** Latest holistic-review cross-beat issues. */
+  holisticIssues: jsonb("holistic_issues").$type<ReviewIssue[]>(),
+  /** Timestamp of the latest holistic review. */
+  holisticReviewedAt: timestamp("holistic_reviewed_at", { withTimezone: true }),
 }, (t) => ({
   moduleIdx: index("lessons_module_idx").on(t.moduleId),
 }));
@@ -93,6 +99,12 @@ export const beats = pgTable("beats", {
   /** Number of revision rounds this beat has been through. */
   revisionCount: integer("revision_count").default(0).notNull(),
   errorMessage: text("error_message"),
+  /** Latest AI reviewer score (0-100) — null if not yet reviewed. */
+  reviewScore: integer("review_score"),
+  /** Structured issue list from the AI reviewer (latest run). */
+  reviewIssues: jsonb("review_issues").$type<ReviewIssue[]>(),
+  /** Timestamp of the latest AI review pass. */
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => ({
@@ -100,6 +112,15 @@ export const beats = pgTable("beats", {
   stageIdx: index("beats_stage_idx").on(t.stage),
   orderIdx: index("beats_order_idx").on(t.lessonId, t.order),
 }));
+
+export interface ReviewIssue {
+  severity: "P0" | "P1" | "P2";
+  category: string;
+  description: string;
+  suggestion?: string;
+  /** For holistic issues, which beat keys are involved. */
+  affectedBeats?: string[];
+}
 
 // ─── Uploaded course material ───────────────────────────────────────
 

@@ -4,7 +4,7 @@ import { use } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
-import { Wand2, Film } from "lucide-react";
+import { Wand2, Film, CheckCircle2 } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
@@ -18,6 +18,7 @@ import { BeatEditor } from "@/components/beat-editor";
 import { JobTimeline } from "@/components/job-timeline";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { ReviewIssues } from "@/components/review-issues";
 
 export default function BeatDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -67,6 +68,16 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
                 {beat.mp4Key ? "Re-render" : "Render"}
               </Button>
             )}
+            {(beat.stage !== "queued" && beat.stage !== "ingested") && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => { await api.reviewBeat(id); await mutate(); }}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Re-review
+              </Button>
+            )}
           </div>
         }
       />
@@ -83,6 +94,18 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
                 </div>
               )}
             </Card>
+
+            {(beat.reviewScore !== null || (beat.reviewIssues && beat.reviewIssues.length > 0)) && (
+              <Card className="p-6">
+                <h3 className="font-semibold mb-3">AI review</h3>
+                <ReviewIssues issues={beat.reviewIssues} score={beat.reviewScore} />
+                {beat.reviewedAt && (
+                  <p className="text-xs text-[var(--color-muted)] mt-3">
+                    Reviewed {new Date(beat.reviewedAt).toLocaleString()}
+                  </p>
+                )}
+              </Card>
+            )}
 
             <Card className="p-6">
               <Tabs defaultValue="edit">
