@@ -99,3 +99,87 @@ function runFfmpeg(args: string[]): Promise<void> {
     ff.on("error", reject);
   });
 }
+
+/**
+ * Concat multiple MP4s into one master with optional inter-beat pauses.
+ * Re-encodes to ensure consistent codecs across all inputs (the cheap
+ * stream-copy concat fails when inputs differ in subtle parameters).
+ *
+ * Caller passes the raw MP4 buffers in playback order. Returns the
+ * concatenated MP4 bytes + total duration.
+ */
+export async function concatMp4s(
+  inputs: Buffer[],
+  opts: { pauseSec?: number } = {},
+): Promise<{ mp4: Buffer; durationSec: number }> {
+  if (inputs.length === 0) throw new Error("concatMp4s: no inputs");
+  if (inputs.length === 1) {
+    const dur = await probeDurationFromBuffer(inputs[0]!);
+    return { mp4: inputs[0]!, durationSec: dur };
+  }
+  const dir = await mkdtemp(join(tmpdir(), "stitch-"));
+  const concatListPath = join(dir, "concat.txt");
+  const outPath = join(dir, "master.mp4");
+  try {
+    const paths: string[] = [];
+    for (let i = 0; i < inputs.length; i++) {
+      const p = join(dir, `seg-${String(i).padStart(3, "0")}.mp4`);
+      await writeFile(p, inputs[i]!);
+      paths.push(p);
+    }
+
+    // ffmpeg concat demuxer syntax: file 'path'
+    const listLines = paths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n");
+    await writeFile(concatListPath, listLines);
+
+    // Re-encode for safety. libx264 + AAC matches our per-beat encoder.
+    await runFfmpeg([
+      "-y",
+      "-f", "concat", "-safe", "0", "-i", concatListPath,
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      "-preset", "veryfast",
+      "-crf", "22",
+      "-c:a", "aac",
+      "-b:a", "160k",
+      "-movflags", "+faststart",
+      outPath,
+    ]);
+
+    const mp4 = await readFile(outPath);
+    const durationSec = await probeDurationFromBuffer(mp4);
+    return { mp4, durationSec };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Run ffprobe on a buffer (via temp file — stdin pipe causes EPIPE). */
+async function probeDurationFromBuffer(buf: Buffer): Promise<number> {
+  const dir = await mkdtemp(join(tmpdir(), "probe-"));
+  const path = join(dir, "in.mp4");
+  try {
+    await writeFile(path, buf);
+    return await new Promise((resolve, reject) => {
+      const ff = spawn("ffprobe", [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        path,
+      ]);
+      let out = "";
+      let err = "";
+      ff.stdout.on("data", (b) => { out += b.toString(); });
+      ff.stderr.on("data", (b) => { err += b.toString(); });
+      ff.on("close", (code) => {
+        if (code !== 0) return reject(new Error(`ffprobe exited ${code}: ${err.slice(0, 200)}`));
+        const n = parseFloat(out.trim());
+        if (!isFinite(n)) return reject(new Error(`ffprobe non-number: ${out}`));
+        resolve(n);
+      });
+      ff.on("error", reject);
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
