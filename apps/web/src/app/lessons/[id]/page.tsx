@@ -4,7 +4,7 @@ import { use } from "react";
 import useSWR from "swr";
 import { Play, Download, Wand2, Film, Glasses } from "lucide-react";
 
-import { api } from "@/lib/api";
+import { api, type LessonJobSummary } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,33 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ReviewIssues } from "@/components/review-issues";
 import { useToast } from "@/lib/use-toast";
+
+function JobPill({ label, job }: { label: string; job: LessonJobSummary | null }) {
+  if (!job) {
+    return (
+      <span className="text-xs text-[var(--color-muted)]">
+        {label} <span className="opacity-60">— not run</span>
+      </span>
+    );
+  }
+  const tone =
+    job.status === "running"   ? "text-[var(--color-accent)]" :
+    job.status === "succeeded" ? "text-[var(--color-accent)]" :
+    job.status === "failed"    ? "text-[var(--color-accent-2)]" :
+    "text-[var(--color-muted)]";
+  const dot =
+    job.status === "running"   ? "bg-[var(--color-accent)] animate-pulse" :
+    job.status === "succeeded" ? "bg-[var(--color-accent)]" :
+    job.status === "failed"    ? "bg-[var(--color-accent-2)]" :
+    "bg-[var(--color-muted)]";
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs ${tone}`}>
+      <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot}`} />
+      {label} · {job.status}
+      {job.progressNote && <span className="text-[var(--color-muted)]">· {job.progressNote}</span>}
+    </span>
+  );
+}
 
 export default function LessonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -41,6 +68,28 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       const r = await api.holisticReviewLesson(id);
       if (!r.ok) throw new Error("failed");
       notify({ title: "Holistic review queued — runs against Claude opus profile", variant: "success" });
+      mutate();
+    } catch (e) {
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
+    }
+  }
+
+  async function publish() {
+    try {
+      const r = await api.publishLesson(id);
+      if (!r.ok) throw new Error("failed to enqueue publish");
+      notify({ title: "Publishing queued — building SCORM 2004 zip", variant: "success" });
+      mutate();
+    } catch (e) {
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
+    }
+  }
+
+  async function restitch() {
+    try {
+      const r = await api.stitchLesson(id);
+      if (!r.ok) throw new Error("failed to enqueue stitch");
+      notify({ title: "Stitch queued — concatenating beats into master mp4", variant: "success" });
       mutate();
     } catch (e) {
       notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
@@ -119,11 +168,12 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                 <Film className="w-4 h-4" />Re-render all
               </Button>
             )}
-            <Button variant="secondary" onClick={() => api.stitchLesson(id).then(() => mutate())}>
+            <Button variant="secondary" onClick={restitch}>
               Re-stitch
             </Button>
-            <Button onClick={() => api.publishLesson(id).then(() => mutate())}>
-              <Play className="w-4 h-4" />Publish
+            <Button onClick={publish} disabled={data.scormJob?.status === "running"}>
+              <Play className="w-4 h-4" />
+              {data.scormJob?.status === "running" ? "Publishing…" : "Publish"}
             </Button>
           </div>
         }
@@ -159,6 +209,18 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                   {renderedCount}/{mainBeats.length}
                 </span>
               </div>
+              {(data.stitchJob || data.scormJob) && (
+                <div className="flex items-center gap-4 text-sm pt-1 border-t border-[var(--color-border)]">
+                  <span className="font-medium w-20">Publishing</span>
+                  <JobPill label="Stitch"  job={data.stitchJob} />
+                  <JobPill label="SCORM"   job={data.scormJob} />
+                  {lesson.publishedAt && (
+                    <span className="text-xs text-[var(--color-muted)] ml-auto">
+                      Published {new Date(lesson.publishedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              )}
             </Card>
           )}
 

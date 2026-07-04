@@ -1,9 +1,35 @@
 import { Hono } from "hono";
-import { eq, asc, inArray } from "drizzle-orm";
+import { and, eq, asc, desc, inArray } from "drizzle-orm";
 
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
 import { breadcrumbsForLesson } from "../lib/breadcrumbs.js";
+
+interface LessonJobSummary {
+  id: string;
+  queue: string;
+  status: string;
+  progressNote: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+}
+
+async function latestJobForLesson(lessonId: string, queue: string): Promise<LessonJobSummary | null> {
+  const [j] = await db.select().from(tables.jobs)
+    .where(and(eq(tables.jobs.lessonId, lessonId), eq(tables.jobs.queue, queue)))
+    .orderBy(desc(tables.jobs.createdAt))
+    .limit(1);
+  if (!j) return null;
+  return {
+    id: j.id, queue: j.queue, status: j.status,
+    progressNote: j.progressNote, errorMessage: j.errorMessage,
+    startedAt: j.startedAt?.toISOString() ?? null,
+    endedAt: j.endedAt?.toISOString() ?? null,
+    createdAt: j.createdAt.toISOString(),
+  };
+}
 
 export const lessonsRoute = new Hono()
   .get("/:id", async (c) => {
@@ -14,7 +40,11 @@ export const lessonsRoute = new Hono()
       .where(eq(tables.beats.lessonId, id))
       .orderBy(asc(tables.beats.order));
     const breadcrumbs = await breadcrumbsForLesson(id);
-    return c.json({ lesson, beats, breadcrumbs });
+    const [stitchJob, scormJob] = await Promise.all([
+      latestJobForLesson(id, "stitch"),
+      latestJobForLesson(id, "scorm_build"),
+    ]);
+    return c.json({ lesson, beats, breadcrumbs, stitchJob, scormJob });
   })
   .post("/:id/author", async (c) => {
     /**

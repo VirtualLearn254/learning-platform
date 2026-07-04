@@ -30,7 +30,11 @@ export const api = {
     fetchJson<{ course: Course }>("/courses", { method: "POST", body: JSON.stringify(input) }),
 
   // Lessons
-  getLesson: (id: string) => fetchJson<{ lesson: Lesson; beats: Beat[]; breadcrumbs: Breadcrumb[] }>(`/lessons/${id}`),
+  getLesson: (id: string) => fetchJson<{
+    lesson: Lesson; beats: Beat[]; breadcrumbs: Breadcrumb[];
+    stitchJob: LessonJobSummary | null;
+    scormJob: LessonJobSummary | null;
+  }>(`/lessons/${id}`),
   authorLesson: (id: string, opts?: { all?: boolean }) =>
     fetchJson<{ ok: boolean; queued?: number; jobIds?: string[]; message?: string; error?: string }>(`/lessons/${id}/author${opts?.all ? "?all=true" : ""}`, { method: "POST" }),
   holisticReviewLesson: (id: string) =>
@@ -182,6 +186,11 @@ export interface JobSummary {
   errorMessage: string | null;
   startedAt: string | null;
   endedAt: string | null;
+}
+
+export interface LessonJobSummary extends JobSummary {
+  queue: string;
+  createdAt: string;
 }
 
 export interface Breadcrumb {
