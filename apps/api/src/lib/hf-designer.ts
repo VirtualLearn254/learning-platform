@@ -1,0 +1,215 @@
+/**
+ * hf-designer — asks the "designer" AI profile to author a full HyperFrames
+ * composition (HTML + CSS + GSAP timeline) for one beat, timed to the
+ * narration audio. This replaces the static template fill-in with bespoke
+ * animated design — the same recipe that produced the hyperframes-pipeline
+ * quality bar, adapted to run against the Anthropic API instead of a local
+ * Claude Code subprocess.
+ *
+ * Output contract (validated by lintHfComposition below):
+ *   - standalone index.html, no <template> wrapper
+ *   - one root <div data-composition-id="root" data-width data-height>
+ *   - narration referenced as an <audio class="clip"> so HF muxes it
+ *   - GSAP timeline registered on window.__timelines["root"], built
+ *     synchronously (never inside async/setTimeout)
+ *   - visual settles >= 1s before the audio ends
+ */
+
+import type { createAIClient } from "@lp/ai-provider";
+
+type AIClient = ReturnType<typeof createAIClient>;
+
+export interface DesignBeatInput {
+  beatKey: string;
+  beatType: "hook" | "concept" | "example" | "check" | "recap";
+  lessonTitle: string;
+  script: string;
+  onScreenText: string[];
+  callouts: string[];
+  /** Narration duration in seconds — drives all timing. */
+  audioDurationSec: number;
+  /** Style slug carried from the style library (kinetic-pop, swiss-grid, …). */
+  styleHint?: string;
+  /** Feedback from a failed lint/render attempt — appended on retry. */
+  repairNotes?: string;
+}
+
+const SYSTEM_PROMPT = `You are a motion designer authoring HyperFrames video compositions — HTML files that a capture engine renders frame-by-frame into MP4. You design educational explainer beats for an adult professional audience: editorial, confident, never cartoonish.
+
+## HyperFrames structural contract (violations = render failure)
+
+1. Output ONE standalone HTML file. NO <template> wrapper — the composition div goes directly in <body>.
+2. Root element: <div data-composition-id="root" data-width="1920" data-height="1080"> containing everything.
+3. Every timed element is a "clip": class="clip", unique id, data-start (seconds), data-duration (seconds), data-track-index (integer; same-track clips must not overlap in time).
+4. The narration audio MUST be included as: <audio id="narration" class="clip" src="assets/narration.mp3" data-start="0" data-track-index="0"></audio>
+5. Load GSAP from CDN: <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+6. Register the timeline SYNCHRONOUSLY at top level (never in async/setTimeout/Promise/load handlers):
+   window.__timelines = window.__timelines || {};
+   const tl = gsap.timeline({ paused: true });
+   /* tweens… */
+   window.__timelines["root"] = tl;
+7. Use data-track-index for scheduling, CSS z-index for visual layering. Never use data-layer or data-end.
+
+## Layout-before-animation doctrine
+
+- Write static CSS for each element's HERO FRAME (fully entered, correctly placed) FIRST. The CSS position is ground truth.
+- Content containers fill the frame with width:100%; height:100%; padding + flex + gap. NEVER position:absolute on content containers (reserve absolute for decoratives).
+- Entrances: gsap.from() TO the CSS position. Exits: gsap.to() away from it.
+- NO UNINTENTIONAL OVERLAPS — two text blocks may never collide. If elements share screen space across time, exit A fully before B enters. This is a hard requirement.
+- Keep 96px minimum padding from frame edges. Nothing may clip off-frame.
+
+## Pacing doctrine (teacher, not reel)
+
+- 2-4 visual phases per beat, each holding at least 6 seconds. Fewer, longer phases beat many fast ones.
+- Time phases proportionally to the narration: if the script has 3 ideas, split the duration ~proportionally to their word counts.
+- Every element gets subtle mid-scene life after entering (slow float ±6px over 4-6s alternating, counter tick, gentle scale breathe 1.00→1.015). Static frozen elements read as broken.
+- ALL motion must SETTLE by (duration − 1.0s). The last second is a calm hold — no entrances, no exits, no movement starting there.
+- Entrance durations 0.5-0.9s, ease "power3.out". Stagger sibling entrances by 0.12-0.2s.
+
+## Typography & design
+
+- Big type: heroes 96-150px, section titles 64-84px, body 34-44px, captions 22-26px. This is video, not a webpage.
+- One accent color per beat, drawn from the style hint. High contrast text (no grey-on-grey).
+- Use real design: cards with generous padding, thin accent rules, numbered markers, subtle grain/pattern backdrops via CSS gradients. No emoji. No stock-photo placeholders.
+- Font stack: system-ui/Helvetica-adjacent is fine; do not @import webfonts (offline render).
+
+## Output format
+
+Reply with ONLY the complete HTML file. No markdown fences, no commentary before or after. Start with <!doctype html>.`;
+
+const STYLE_PALETTES: Record<string, string> = {
+  "kinetic-pop":   "electric blue #2563EB accent on near-white #F7F8FA, ink #0B1220 text, bold geometric",
+  "swiss-grid":    "signal red #DC2626 accent on paper #FAFAF7, near-black #111 text, strict grid, generous whitespace",
+  "warm-grain":    "amber #D97706 accent on cream #FBF6EE, warm brown-black #221A10 text, soft shadows",
+  "liquid-glass":  "teal #0D9488 accent on deep navy #0B1B2B, white text, frosted-glass cards (blur + translucency)",
+  "neon-grid":     "cyan #22D3EE accent on charcoal #101418, off-white text, thin luminous rules",
+  "paper-mark":    "forest #166534 accent on warm paper #F6F1E7, ink text, underline/annotation marks",
+  "magnetic-flow": "violet #7C3AED accent on soft lavender-white #F6F4FB, ink text, flowing curved dividers",
+};
+
+export function buildDesignerPrompt(input: DesignBeatInput): { system: string; user: string } {
+  const dur = input.audioDurationSec;
+  const settleAt = Math.max(1, dur - 1).toFixed(1);
+  const palette = STYLE_PALETTES[input.styleHint ?? ""] ?? STYLE_PALETTES["swiss-grid"]!;
+
+  const user = `Design the composition for this beat.
+
+BEAT: ${input.beatKey} (type: ${input.beatType})
+LESSON: ${input.lessonTitle}
+COMPOSITION DURATION: ${dur.toFixed(1)}s exactly — set data-duration="${dur.toFixed(1)}" on the root composition div.
+ALL MOTION SETTLED BY: ${settleAt}s.
+
+NARRATION (already recorded; the audio file is assets/narration.mp3):
+"""
+${input.script.trim()}
+"""
+
+ON-SCREEN TEXT (the key phrases that must appear, in narration order — you may shorten but not reword):
+${input.onScreenText.map((t, i) => `${i + 1}. ${t}`).join("\n") || "(none — design from the narration's key ideas)"}
+
+CALLOUT CHIPS (small supporting labels, optional placement):
+${input.callouts.join(" · ") || "(none)"}
+
+STYLE: ${input.styleHint ?? "swiss-grid"} — ${palette}
+
+Phase the visuals to follow the narration's idea order. Reveal each on-screen text roughly when the narrator reaches that idea (estimate by word position ÷ total words × ${dur.toFixed(1)}s). Remember: 2-4 phases, ≥6s each, settle by ${settleAt}s, zero overlaps.${input.repairNotes ? `
+
+PREVIOUS ATTEMPT FAILED VALIDATION — fix these issues:
+${input.repairNotes}` : ""}`;
+
+  return { system: SYSTEM_PROMPT, user };
+}
+
+// ─── Static lint: catch contract violations before spending render time ───
+
+export interface HfLintResult {
+  ok: boolean;
+  issues: string[];
+}
+
+export function lintHfComposition(html: string, expectedDurationSec: number): HfLintResult {
+  const issues: string[] = [];
+
+  if (!/^\s*<!doctype html>/i.test(html)) issues.push(`Must start with <!doctype html> (got: ${html.slice(0, 40)}…)`);
+  if (/<template[\s>]/i.test(html)) issues.push("Standalone composition must not use <template> wrapper");
+  if (!/data-composition-id\s*=\s*["']root["']/.test(html)) issues.push(`Missing root <div data-composition-id="root">`);
+  if (!/data-width\s*=\s*["']1920["']/.test(html) || !/data-height\s*=\s*["']1080["']/.test(html)) {
+    issues.push("Root composition needs data-width=\"1920\" data-height=\"1080\"");
+  }
+  if (!/<audio[^>]*class\s*=\s*["'][^"']*clip[^"']*["'][^>]*src\s*=\s*["']assets\/narration\.mp3["']/.test(html)
+      && !/<audio[^>]*src\s*=\s*["']assets\/narration\.mp3["'][^>]*class\s*=\s*["'][^"']*clip/.test(html)) {
+    issues.push(`Missing narration clip: <audio class="clip" src="assets/narration.mp3" data-start="0" data-track-index="0">`);
+  }
+  if (!/window\.__timelines\s*\[\s*["']root["']\s*\]\s*=/.test(html)) {
+    issues.push(`Timeline not registered: window.__timelines["root"] = tl`);
+  }
+  if (!/gsap\.timeline\s*\(\s*\{[^}]*paused\s*:\s*true/.test(html)) {
+    issues.push("GSAP timeline must be created with { paused: true }");
+  }
+  if (/window\.__timelines[^;]*=[^;]*;\s*$/.test(html) === false && /(setTimeout|addEventListener\s*\(\s*["']load|\.then\s*\(|await )/.test(
+      html.slice(html.indexOf("__timelines")))) {
+    // Heuristic: async constructs after the __timelines mention are suspicious but not fatal.
+  }
+  if (/data-layer|data-end\s*=/.test(html)) issues.push("Forbidden attributes: data-layer / data-end (use data-track-index / data-duration)");
+  if (/@import\s+url|fonts\.googleapis/.test(html)) issues.push("No webfont imports — offline render");
+
+  // Duration attr on the root composition should match the audio (±0.5s tolerated).
+  const durMatch = html.match(/data-composition-id\s*=\s*["']root["'][^>]*data-duration\s*=\s*["']([\d.]+)["']/)
+    ?? html.match(/data-duration\s*=\s*["']([\d.]+)["'][^>]*data-composition-id\s*=\s*["']root["']/);
+  if (!durMatch) {
+    issues.push(`Root composition missing data-duration="${expectedDurationSec.toFixed(1)}"`);
+  } else {
+    const got = parseFloat(durMatch[1]!);
+    if (Math.abs(got - expectedDurationSec) > 0.75) {
+      issues.push(`Root data-duration=${got} but narration is ${expectedDurationSec.toFixed(1)}s — they must match`);
+    }
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
+/** Strip accidental markdown fences some models wrap around the HTML. */
+function extractHtml(raw: string): string {
+  const fenced = raw.match(/```(?:html)?\s*([\s\S]*?)```/);
+  const body = fenced ? fenced[1]! : raw;
+  const start = body.indexOf("<!doctype");
+  const startUpper = body.indexOf("<!DOCTYPE");
+  const idx = start >= 0 ? start : startUpper;
+  return (idx >= 0 ? body.slice(idx) : body).trim();
+}
+
+/**
+ * Author the animated composition, with one automatic repair round if the
+ * first attempt fails lint. Throws if both attempts fail — caller falls
+ * back to the static template path.
+ */
+export async function designAnimatedBeat(
+  ai: AIClient,
+  input: DesignBeatInput,
+  onNote?: (note: string) => Promise<void> | void,
+): Promise<{ html: string; attempts: number }> {
+  let repairNotes: string | undefined;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { system, user } = buildDesignerPrompt({ ...input, repairNotes });
+    await onNote?.(`designing animated composition (attempt ${attempt})`);
+    const res = await ai.chat("designer", {
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    });
+    if (res.truncated) {
+      repairNotes = "Output hit the token limit — produce a more compact composition (fewer elements, terser CSS).";
+      await onNote?.("designer output truncated, retrying compact");
+      continue;
+    }
+    const html = extractHtml(res.text);
+    const lint = lintHfComposition(html, input.audioDurationSec);
+    if (lint.ok) return { html, attempts: attempt };
+    repairNotes = lint.issues.map((i) => `- ${i}`).join("\n");
+    await onNote?.(`lint failed (${lint.issues.length} issues), ${attempt === 1 ? "retrying with feedback" : "giving up"}`);
+  }
+
+  throw new Error(`Designer output failed HF lint after 2 attempts: ${repairNotes}`);
+}

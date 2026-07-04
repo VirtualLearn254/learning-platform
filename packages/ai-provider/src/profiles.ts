@@ -39,6 +39,22 @@ export const profiles = {
     maxTokens: 8000,
   },
 
+  /** Animated-HTML designer: script + visualSpec + audio duration in,
+   *  full HyperFrames composition (HTML + CSS + GSAP timeline) out.
+   *  Output runs 6-14K tokens, so the budget is the largest of any profile. */
+  designer: {
+    id: "designer",
+    preferred: ["anthropic", "local", "openai", "deepseek"],
+    modelByProvider: {
+      anthropic: "claude-sonnet-4-6",
+      local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
+      deepseek: "deepseek-chat",
+      openai:   "gpt-4o",
+    },
+    temperature: 0.6,
+    maxTokens: 16000,
+  },
+
   /** Reviewing a beat for static issues. Quality-tolerant, cheap. */
   reviewer: {
     id: "reviewer",

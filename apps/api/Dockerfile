@@ -13,9 +13,13 @@ RUN apk add --no-cache \
       chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto \
       ffmpeg
 
-# Tell puppeteer-core where the system chromium lives instead of downloading one.
+# Tell puppeteer(-core) where the system chromium lives instead of downloading
+# one. All three env names matter: @hyperframes/producer bundles full puppeteer,
+# whose postinstall respects SKIP_DOWNLOAD + the headless-shell variant.
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
-    PUPPETEER_SKIP_DOWNLOAD=true
+    PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_SKIP_CHROME_HEADLESS_SHELL_DOWNLOAD=true
 
 # ── Install workspace deps ────────────────────────────────────────────
 COPY package.json package-lock.json* tsconfig.base.json ./
