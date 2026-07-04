@@ -176,9 +176,29 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
 
           {masterUrl && (
             <Card className="p-6">
-              <h3 className="font-semibold mb-3">Master</h3>
+              <div className="flex items-start justify-between mb-3 gap-4">
+                <h3 className="font-semibold">Master</h3>
+                <div className="flex gap-3">
+                  <a
+                    href={masterUrl}
+                    download={`${lesson.title.replace(/[^a-zA-Z0-9._-]/g, "_")}.mp4`}
+                    className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download MP4
+                  </a>
+                  {scormUrl && (
+                    <a
+                      href={scormUrl}
+                      download={`${lesson.title.replace(/[^a-zA-Z0-9._-]/g, "_")}.zip`}
+                      className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Download SCORM
+                    </a>
+                  )}
+                </div>
+              </div>
               <VideoPlayer src={masterUrl} controls />
-              {scormUrl && (
+              {false && scormUrl && (
                 <a href={scormUrl} className="mt-4 inline-flex items-center gap-2 text-sm text-[var(--color-accent)] hover:underline">
                   <Download className="w-3.5 h-3.5" /> Download SCORM package
                 </a>
