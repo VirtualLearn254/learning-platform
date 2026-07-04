@@ -16,6 +16,7 @@
  */
 
 import type { createAIClient } from "@lp/ai-provider";
+import type { WordTimestamp } from "./tts.js";
 
 type AIClient = ReturnType<typeof createAIClient>;
 
@@ -30,6 +31,9 @@ export interface DesignBeatInput {
   audioDurationSec: number;
   /** Style slug carried from the style library (kinetic-pop, swiss-grid, …). */
   styleHint?: string;
+  /** Whisper word-level timestamps — when present, reveals anchor to the
+   *  actual spoken word instead of proportional estimates. */
+  wordTimestamps?: WordTimestamp[];
   /** Feedback from a failed lint/render attempt — appended on retry. */
   repairNotes?: string;
 }
@@ -112,7 +116,10 @@ ${input.callouts.join(" · ") || "(none)"}
 
 STYLE: ${input.styleHint ?? "swiss-grid"} — ${palette}
 
-Phase the visuals to follow the narration's idea order. Reveal each on-screen text roughly when the narrator reaches that idea (estimate by word position ÷ total words × ${dur.toFixed(1)}s). Remember: 2-4 phases, ≥6s each, settle by ${settleAt}s, zero overlaps.${input.repairNotes ? `
+${input.wordTimestamps && input.wordTimestamps.length > 0 ? `WORD TIMINGS (whisper-aligned; "word@seconds"). Anchor each on-screen reveal to the moment its phrase is SPOKEN — start the entrance 0.1-0.2s before the first word of the phrase:
+${input.wordTimestamps.map((w) => `${w.word.trim()}@${w.start.toFixed(1)}`).join(" ")}
+
+Phase the visuals to follow the narration's idea order, using the word timings above as the ground truth for when each phase begins.` : `Phase the visuals to follow the narration's idea order. Reveal each on-screen text roughly when the narrator reaches that idea (estimate by word position ÷ total words × ${dur.toFixed(1)}s).`} Remember: 2-4 phases, ≥6s each, settle by ${settleAt}s, zero overlaps.${input.repairNotes ? `
 
 PREVIOUS ATTEMPT FAILED VALIDATION — fix these issues:
 ${input.repairNotes}` : ""}`;

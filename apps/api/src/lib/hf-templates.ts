@@ -122,7 +122,7 @@ function twoColumn(input: BeatTemplateInput, style: BeatStyle): string {
     <div class="stage" style="flex-direction: column; gap: 48px; width: 100%;">
       <div style="display: grid; grid-template-columns: repeat(${Math.min(2, items.length)}, 1fr); gap: 36px; width: 100%; max-width: 1700px; margin: 0 auto;">
         ${items.map((t) => {
-          const [label, ...rest] = t.split(/·\s*/);
+          const [label = "", ...rest] = t.split(/·\s*/);
           const body = rest.join(" · ") || label;
           const hasBody = rest.length > 0;
           return `<div class="surface" style="padding: 56px 48px; min-height: 280px; display: flex; flex-direction: column; gap: 20px;">

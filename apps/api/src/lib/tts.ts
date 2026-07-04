@@ -55,6 +55,42 @@ export async function synthesize(text: string, opts: TtsOptions = {}): Promise<T
   return { audio, durationSec };
 }
 
+export interface WordTimestamp {
+  word: string;
+  /** Seconds from audio start. */
+  start: number;
+  end: number;
+}
+
+/**
+ * Word-level timestamps for narration audio via OpenAI whisper-1
+ * (~$0.006/min). These drive on-screen reveal timing in the animated
+ * designer: each key phrase enters when the narrator actually says it.
+ *
+ * Returns [] on failure — callers degrade to proportional estimation.
+ */
+export async function transcribeWords(audio: Buffer): Promise<WordTimestamp[]> {
+  const key = await getSecret("openai_api_key");
+  if (!key) return [];
+  try {
+    const client = new OpenAI({ apiKey: key, timeout: 120_000, maxRetries: 1 });
+    const t0 = Date.now();
+    const file = await OpenAI.toFile(audio, "narration.mp3", { type: "audio/mpeg" });
+    const res = await client.audio.transcriptions.create({
+      model: "whisper-1",
+      file,
+      response_format: "verbose_json",
+      timestamp_granularities: ["word"],
+    });
+    const words = (res as unknown as { words?: Array<{ word: string; start: number; end: number }> }).words ?? [];
+    console.log(`[tts] whisper: ${words.length} word timestamps in ${Date.now() - t0}ms`);
+    return words.map((w) => ({ word: w.word, start: w.start, end: w.end }));
+  } catch (err) {
+    console.warn(`[tts] whisper transcription failed (degrading to estimates):`, err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);

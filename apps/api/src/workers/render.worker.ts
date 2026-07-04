@@ -26,11 +26,12 @@ import { db, tables } from "../db/index.js";
 import { QueueNames, queues } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
 import { s3 } from "../lib/s3.js";
-import { synthesize } from "../lib/tts.js";
+import { synthesize, transcribeWords } from "../lib/tts.js";
 import { htmlToPng, assembleMp4 } from "../lib/render.js";
 import { buildBeatHtmlHF, type BeatStyle } from "../lib/hf-templates.js";
-import { designAnimatedBeat } from "../lib/hf-designer.js";
+import { designAnimatedBeat, type DesignBeatInput } from "../lib/hf-designer.js";
 import { renderAnimatedMp4 } from "../lib/hf-render.js";
+import { verifyComposition } from "../lib/hf-verifier.js";
 import { ai } from "./services.js";
 
 interface JobData {
@@ -104,7 +105,11 @@ export function startRenderWorker() {
 
       if (ANIMATED_ENABLED && !staticOnly) {
         try {
-          const design = await designAnimatedBeat(ai, {
+          // Phase 2: whisper word timestamps — reveals anchor to spoken words.
+          await note("aligning word timestamps (whisper)");
+          const wordTimestamps = await transcribeWords(mp3);
+
+          const designInput: DesignBeatInput = {
             beatKey: beat.beatKey,
             beatType: beat.beatType,
             lessonTitle,
@@ -113,15 +118,53 @@ export function startRenderWorker() {
             callouts: visual.callouts ?? [],
             audioDurationSec: durationSec,
             styleHint: visual.style ?? styleHints?.style,
-          }, note);
+            wordTimestamps,
+          };
+          const design = await designAnimatedBeat(ai, designInput, note);
+          let finalHtml = design.html;
+
+          // Phase 3: vision verifier — 3 sampled frames checked for overlap /
+          // clipping / contrast before the expensive full render. One repair
+          // round on P0; a still-failing repair falls through with a warning
+          // (the human reviewer is the next gate).
+          try {
+            await note("verifying composition frames (vision)");
+            const verdict = await verifyComposition(ai, finalHtml, durationSec);
+            if (!verdict.pass) {
+              const p0s = verdict.issues.filter((i) => i.severity === "P0");
+              await note(`verifier found ${p0s.length} P0 issue(s) — repair round`);
+              const repaired = await designAnimatedBeat(ai, {
+                ...designInput,
+                repairNotes: verdict.issues.map((i) => `- [${i.severity}] frame ${i.frame}: ${i.description} → ${i.fix}`).join("\n"),
+              }, note);
+              const recheck = await verifyComposition(ai, repaired.html, durationSec);
+              if (recheck.pass) {
+                finalHtml = repaired.html;
+                await note("repair verified clean");
+              } else {
+                // Keep the better of the two: repaired if it reduced P0 count.
+                const before = p0s.length;
+                const after = recheck.issues.filter((i) => i.severity === "P0").length;
+                if (after < before) finalHtml = repaired.html;
+                await note(`verifier still sees ${Math.min(before, after)} P0(s) — proceeding, flagged for human review`);
+              }
+            } else if (verdict.issues.length > 0) {
+              await note(`verifier: pass with ${verdict.issues.length} minor note(s)`);
+            } else {
+              await note("verifier: clean");
+            }
+          } catch (verr) {
+            // Verifier is best-effort — never block the render on its failure.
+            console.warn(`[render:${jobId.slice(0, 8)}] verifier errored (skipping):`, verr instanceof Error ? verr.message : verr);
+          }
 
           htmlKey = `beats/${beatId}/composition.html`;
-          await s3.putObject(htmlKey, Buffer.from(design.html, "utf8"), { contentType: "text/html" });
+          await s3.putObject(htmlKey, Buffer.from(finalHtml, "utf8"), { contentType: "text/html" });
 
           await note(`rendering animated composition (${durationSec.toFixed(1)}s @ 30fps)`);
           let lastProgress = 0;
           mp4 = await renderAnimatedMp4({
-            html: design.html,
+            html: finalHtml,
             audioMp3: mp3,
             onProgress: (msg) => {
               // Throttle: HF emits many progress lines; persist one every ~5s.
