@@ -39,6 +39,7 @@ export const api = {
     lesson: Lesson; beats: Beat[]; breadcrumbs: Breadcrumb[];
     stitchJob: LessonJobSummary | null;
     scormJob: LessonJobSummary | null;
+    aiCostUsd: number;
   }>(`/lessons/${id}`),
   authorLesson: (id: string, opts?: { all?: boolean }) =>
     fetchJson<{ ok: boolean; queued?: number; jobIds?: string[]; message?: string; error?: string }>(`/lessons/${id}/author${opts?.all ? "?all=true" : ""}`, { method: "POST" }),
@@ -56,7 +57,8 @@ export const api = {
     if (params?.lessonId) qs.set("lessonId", params.lessonId);
     return fetchJson<{ beats: Beat[] }>(`/beats${qs.toString() ? `?${qs}` : ""}`);
   },
-  getBeat: (id: string) => fetchJson<{ beat: Beat; breadcrumbs: Breadcrumb[] }>(`/beats/${id}`),
+  getBeat: (id: string) => fetchJson<{ beat: Beat; breadcrumbs: Breadcrumb[]; aiCostUsd: number }>(`/beats/${id}`),
+  listBeatRenders: (id: string) => fetchJson<{ renders: Array<{ key: string; renderedAt: string | null; mode: string; sizeBytes: number }> }>(`/beats/${id}/renders`),
   authorBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/author`, { method: "POST" }),
   renderBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/render`, { method: "POST" }),
   reviewBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/review`, { method: "POST" }),

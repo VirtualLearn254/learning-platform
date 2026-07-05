@@ -20,6 +20,8 @@ export interface UsageEvent {
   durationMs: number;
   status: "ok" | "error";
   errorMessage?: string;
+  beatId?: string;
+  lessonId?: string;
 }
 
 export type UsageHook = (evt: UsageEvent) => void | Promise<void>;
@@ -37,7 +39,7 @@ export function withLogging(client: AIClient, hook: UsageHook): AIClient {
     return profile.preferred[0] ?? "unknown";
   }
 
-  async function emit(profileId: string, started: number, res: ChatResponse | null, err?: unknown) {
+  async function emit(profileId: string, started: number, res: ChatResponse | null, err?: unknown, meta?: { beatId?: string; lessonId?: string }) {
     const durationMs = Date.now() - started;
     const evt: UsageEvent = res
       ? {
@@ -49,6 +51,8 @@ export function withLogging(client: AIClient, hook: UsageHook): AIClient {
           costUsd: 0,
           durationMs,
           status: "ok",
+          beatId: meta?.beatId,
+          lessonId: meta?.lessonId,
         }
       : {
           profileId,
@@ -76,7 +80,7 @@ export function withLogging(client: AIClient, hook: UsageHook): AIClient {
       const started = Date.now();
       try {
         const res = await client.chat(profileId, req);
-        await emit(profileId, started, res);
+        await emit(profileId, started, res, undefined, req.meta);
         return res;
       } catch (err) {
         await emit(profileId, started, null, err);
@@ -87,7 +91,7 @@ export function withLogging(client: AIClient, hook: UsageHook): AIClient {
       const started = Date.now();
       try {
         const res = await client.vision(profileId, req);
-        await emit(profileId, started, res);
+        await emit(profileId, started, res, undefined, req.meta);
         return res;
       } catch (err) {
         await emit(profileId, started, null, err);

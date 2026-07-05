@@ -39,6 +39,8 @@ export interface DesignBeatInput {
   compact?: boolean;
   /** Feedback from a failed lint/render attempt — appended on retry. */
   repairNotes?: string;
+  /** Usage-attribution context — flows into ai_usage rows. */
+  meta?: { beatId?: string; lessonId?: string };
 }
 
 const SYSTEM_PROMPT = `You are a motion designer authoring HyperFrames video compositions — HTML files that a capture engine renders frame-by-frame into MP4. You design educational explainer beats for an adult professional audience: editorial, confident, never cartoonish.
@@ -341,6 +343,7 @@ export async function designAnimatedBeat(
         { role: "system", content: system },
         { role: "user", content: user },
       ],
+      meta: input.meta,
     });
     const html = extractHtml(res.text);
     // Reasoning models (GLM 5.2) may hit the token limit AFTER emitting a

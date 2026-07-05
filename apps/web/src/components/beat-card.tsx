@@ -36,7 +36,19 @@ export function BeatCard({ beat, compact = false, onAction }: { beat: Beat; comp
 
   return (
     <Link href={`/beats/${beat.id}`} className="block">
-      <Card className={cn("hover:border-[var(--color-ink)] transition-colors cursor-pointer", compact ? "p-3" : "p-4")}>
+      <Card className={cn("hover:border-[var(--color-ink)] transition-colors cursor-pointer overflow-hidden", compact ? "p-3" : "p-4")}>
+        {/* Hero frame from the vision verifier — present for animated renders,
+            hides itself for older/static beats. */}
+        {beat.htmlKey && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={`/api/files/${encodeURIComponent(`beats/${beat.id}/verify-2.png`)}`}
+            alt=""
+            loading="lazy"
+            className={cn("w-full aspect-video object-cover rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]", compact ? "mb-2" : "mb-3")}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        )}
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">

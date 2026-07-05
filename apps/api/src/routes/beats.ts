@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 import { z } from "zod";
 
@@ -17,6 +17,7 @@ const UpdateBeatSchema = z.object({
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
 import { breadcrumbsForBeat } from "../lib/breadcrumbs.js";
+import { s3 } from "../lib/s3.js";
 
 export const beatsRoute = new Hono()
   .get("/", async (c) => {
@@ -37,7 +38,30 @@ export const beatsRoute = new Hono()
     const beat = await db.query.beats.findFirst({ where: eq(tables.beats.id, id) });
     if (!beat) return c.json({ error: "not_found" }, 404);
     const breadcrumbs = await breadcrumbsForBeat(id);
-    return c.json({ beat, breadcrumbs });
+    // AI spend attributed to this beat (designer + verifier calls carry meta).
+    const [cost] = await db.select({ total: sql<string>`coalesce(sum(${tables.aiUsage.costUsd}), 0)` })
+      .from(tables.aiUsage).where(eq(tables.aiUsage.beatId, id));
+    return c.json({ beat, breadcrumbs, aiCostUsd: Number(cost?.total ?? 0) });
+  })
+  .get("/:id/renders", async (c) => {
+    /** All rendered MP4 versions for this beat, newest first — powers the
+     *  side-by-side render comparison. Keys are versioned per render. */
+    const id = c.req.param("id");
+    const objects = await s3.listObjects(`beats/${id}/renders/`, 50);
+    const renders = objects
+      .filter((o) => o.key.endsWith(".mp4"))
+      .sort((a, b) => b.key.localeCompare(a.key)) // timestamp prefix → newest first
+      .map((o) => {
+        const file = o.key.split("/").pop() ?? "";
+        const [ts, modeWithExt] = file.split("-");
+        return {
+          key: o.key,
+          renderedAt: Number.isFinite(Number(ts)) ? new Date(Number(ts)).toISOString() : null,
+          mode: modeWithExt?.replace(".mp4", "") ?? "unknown",
+          sizeBytes: o.size,
+        };
+      });
+    return c.json({ renders });
   })
   .post("/:id/author", async (c) => {
     const id = c.req.param("id");

@@ -126,11 +126,14 @@ export async function verifyComposition(
   durationSec: number,
   /** Pre-captured frames (e.g. already uploaded to S3) — captured fresh when omitted. */
   precapturedFrames?: Buffer[],
+  /** Usage-attribution context — flows into ai_usage rows. */
+  meta?: { beatId?: string; lessonId?: string },
 ): Promise<VerifyResult> {
   const times = sampleTimes(durationSec);
   const frames = precapturedFrames ?? await captureTimelineFrames(html, times);
 
   const res = await ai.vision("verifier", {
+    meta,
     system: VERIFY_SYSTEM,
     prompt: `Three frames from one beat, sampled at ${times.map((t) => t.toFixed(1) + "s")
       .join(", ")} of ${durationSec.toFixed(1)}s: EARLY, HERO, SETTLE. Find real defects only.`,

@@ -223,8 +223,11 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                   <span className="font-medium w-20">Publishing</span>
                   <JobPill label="Stitch"  job={data.stitchJob} />
                   <JobPill label="SCORM"   job={data.scormJob} />
+                  {data.aiCostUsd > 0 && (
+                    <span className="text-xs text-[var(--color-muted)] ml-auto tabular-nums">AI spend ${data.aiCostUsd.toFixed(2)}</span>
+                  )}
                   {lesson.publishedAt && (
-                    <span className="text-xs text-[var(--color-muted)] ml-auto">
+                    <span className="text-xs text-[var(--color-muted)]">
                       Published {new Date(lesson.publishedAt).toLocaleString()}
                     </span>
                   )}

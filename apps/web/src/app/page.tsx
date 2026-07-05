@@ -9,6 +9,7 @@ import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ErrorState } from "@/components/error-state";
+import { useLiveJobs } from "@/lib/use-live-jobs";
 
 const PROVIDER_LABELS: Array<{ key: string; label: string }> = [
   { key: "anthropic", label: "anthropic" },
@@ -22,7 +23,8 @@ export default function Dashboard() {
   const { data: health } = useSWR("health", () => api.health(), { refreshInterval: 10000 });
   const { data: coursesData, error: coursesError, mutate: retryCourses } = useSWR("courses", () => api.listCourses());
   const { data: beatsData } = useSWR("beats", () => api.listBeats(), { refreshInterval: 5000 });
-  const { data: jobsData } = useSWR("dash-jobs", () => api.listJobs(), { refreshInterval: 5000 });
+  const { data: jobsData, mutate: refreshJobs } = useSWR("dash-jobs", () => api.listJobs(), { refreshInterval: 5000 });
+  useLiveJobs(() => refreshJobs());
 
   const courses = coursesData?.courses ?? [];
   const beats = beatsData?.beats ?? [];

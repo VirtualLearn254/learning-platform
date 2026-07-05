@@ -5,6 +5,8 @@ export interface ChatMessage {
 
 export interface ChatRequest {
   messages: ChatMessage[];
+  /** Optional attribution context — flows into usage logging untouched. */
+  meta?: { beatId?: string; lessonId?: string };
   model?: string;
   temperature?: number;
   maxTokens?: number;

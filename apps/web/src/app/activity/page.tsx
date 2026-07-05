@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/error-state";
 import { useToast } from "@/lib/use-toast";
+import { useLiveJobs } from "@/lib/use-live-jobs";
 
 const QUEUES = ["all", "ingest", "author", "ai_review", "holistic", "render", "stitch", "scorm_build"] as const;
 
@@ -95,6 +96,8 @@ export default function ActivityPage() {
     { refreshInterval: (latest) =>
         latest?.jobs.some((j) => j.status === "running" || j.status === "queued") ? 2500 : 15000 },
   );
+
+  useLiveJobs(() => mutate());
 
   async function handleRetry(job: ActivityJob) {
     try {

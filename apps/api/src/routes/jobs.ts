@@ -1,10 +1,38 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { eq, desc, and, lt } from "drizzle-orm";
 
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
 
 export const jobsRoute = new Hono()
+  /**
+   * Server-sent events: pushes the latest jobs whenever anything changes,
+   * so the UI updates the moment a progressNote ticks instead of on the
+   * next poll. Registered before /:id so it isn't shadowed. Client
+   * EventSource auto-reconnects when we close after maxLifetime.
+   */
+  .get("/stream", (c) => {
+    return streamSSE(c, async (stream) => {
+      const startedAt = Date.now();
+      const MAX_LIFETIME_MS = 5 * 60 * 1000;
+      let lastSig = "";
+      while (!stream.aborted && Date.now() - startedAt < MAX_LIFETIME_MS) {
+        try {
+          const rows = await db.select().from(tables.jobs)
+            .orderBy(desc(tables.jobs.createdAt)).limit(30);
+          const sig = rows.map((j) => `${j.id}:${j.status}:${j.progressNote ?? ""}`).join("|");
+          if (sig !== lastSig) {
+            lastSig = sig;
+            await stream.writeSSE({ event: "jobs", data: JSON.stringify({ ts: Date.now() }) });
+          }
+        } catch (err) {
+          console.warn("[jobs/stream] tick failed:", err instanceof Error ? err.message : err);
+        }
+        await stream.sleep(2000);
+      }
+    });
+  })
   .get("/", async (c) => {
     const beatId = c.req.query("beatId");
     const lessonId = c.req.query("lessonId");

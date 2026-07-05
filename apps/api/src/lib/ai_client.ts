@@ -41,6 +41,8 @@ async function persistUsage(evt: UsageEvent): Promise<void> {
     outputTokens: evt.outputTokens,
     costUsd: evt.costUsd.toFixed(8),
     durationMs: evt.durationMs,
+    beatId: evt.beatId ?? null,
+    lessonId: evt.lessonId ?? null,
     status: evt.status,
     errorMessage: evt.errorMessage ?? null,
   });

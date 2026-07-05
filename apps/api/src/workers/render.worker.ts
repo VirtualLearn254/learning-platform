@@ -136,6 +136,7 @@ export function startRenderWorker() {
             styleHint: visual.style ?? styleHints?.style,
             wordTimestamps,
             compact,
+            meta: { beatId, lessonId: beat.lessonId },
           };
           const design = await designAnimatedBeat(ai, designInput, note);
           let finalHtml = design.html;
@@ -148,7 +149,7 @@ export function startRenderWorker() {
           try {
             await note("verifying composition frames (vision)");
             let frames = await captureTimelineFrames(finalHtml, sampleTimes(durationSec));
-            const verdict = await verifyComposition(ai, finalHtml, durationSec, frames);
+            const verdict = await verifyComposition(ai, finalHtml, durationSec, frames, designInput.meta);
             if (!verdict.pass) {
               const p0s = verdict.issues.filter((i) => i.severity === "P0");
               await note(`verifier found ${p0s.length} P0 issue(s) — repair round`);
@@ -157,7 +158,7 @@ export function startRenderWorker() {
                 repairNotes: verdict.issues.map((i) => `- [${i.severity}] frame ${i.frame}: ${i.description} → ${i.fix}`).join("\n"),
               }, note);
               const repairedFrames = await captureTimelineFrames(repaired.html, sampleTimes(durationSec));
-              const recheck = await verifyComposition(ai, repaired.html, durationSec, repairedFrames);
+              const recheck = await verifyComposition(ai, repaired.html, durationSec, repairedFrames, designInput.meta);
               if (recheck.pass) {
                 finalHtml = repaired.html;
                 frames = repairedFrames;
@@ -227,8 +228,11 @@ export function startRenderWorker() {
         renderMode = "static";
       }
 
-      // 4. Upload MP4 + update beat
-      const mp4Key = `beats/${beatId}/${beat.beatKey}.mp4`;
+      // 4. Upload MP4 + update beat. Keys are versioned per render:
+      //  - old renders stay in S3 for side-by-side comparison in the UI
+      //  - browsers can never serve a stale video from cache (same-URL
+      //    overwrite was the cause of a "12s then jump to end" ghost bug)
+      const mp4Key = `beats/${beatId}/renders/${Date.now()}-${renderMode}.mp4`;
       await s3.putObject(mp4Key, mp4, { contentType: "video/mp4" });
 
       await db.update(tables.beats).set({

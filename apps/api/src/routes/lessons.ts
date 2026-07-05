@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, eq, asc, desc, inArray } from "drizzle-orm";
+import { and, eq, asc, desc, inArray, sql } from "drizzle-orm";
 
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
@@ -40,11 +40,13 @@ export const lessonsRoute = new Hono()
       .where(eq(tables.beats.lessonId, id))
       .orderBy(asc(tables.beats.order));
     const breadcrumbs = await breadcrumbsForLesson(id);
-    const [stitchJob, scormJob] = await Promise.all([
+    const [stitchJob, scormJob, cost] = await Promise.all([
       latestJobForLesson(id, "stitch"),
       latestJobForLesson(id, "scorm_build"),
+      db.select({ total: sql<string>`coalesce(sum(${tables.aiUsage.costUsd}), 0)` })
+        .from(tables.aiUsage).where(eq(tables.aiUsage.lessonId, id)),
     ]);
-    return c.json({ lesson, beats, breadcrumbs, stitchJob, scormJob });
+    return c.json({ lesson, beats, breadcrumbs, stitchJob, scormJob, aiCostUsd: Number(cost[0]?.total ?? 0) });
   })
   .post("/:id/author", async (c) => {
     /**

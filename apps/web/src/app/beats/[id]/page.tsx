@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
@@ -21,6 +21,54 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ReviewIssues } from "@/components/review-issues";
 import { ErrorState } from "@/components/error-state";
 import { useToast } from "@/lib/use-toast";
+
+/**
+ * Render history: every versioned MP4 for this beat, newest first. Pick two
+ * to compare side by side — the fastest way to judge a model/prompt change.
+ */
+function RenderHistory({ beatId }: { beatId: string }) {
+  const { data } = useSWR(`beat-renders-${beatId}`, () => api.listBeatRenders(beatId), { refreshInterval: 15000 });
+  const [compare, setCompare] = useState<string[]>([]);
+  const renders = data?.renders ?? [];
+  if (renders.length === 0) return null;
+
+  function toggle(key: string) {
+    setCompare((prev) => prev.includes(key)
+      ? prev.filter((k) => k !== key)
+      : [...prev.slice(-1), key]); // keep at most 2
+  }
+
+  return (
+    <Card className="p-6">
+      <h3 className="font-semibold mb-1">Render history ({renders.length})</h3>
+      <p className="text-xs text-[var(--color-muted)] mb-3">Select two to compare side by side.</p>
+      <ul className="space-y-1.5 mb-4">
+        {renders.map((r) => (
+          <li key={r.key} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={compare.includes(r.key)}
+              onChange={() => toggle(r.key)}
+              className="accent-[var(--color-accent)]"
+            />
+            <span className="tabular-nums text-xs text-[var(--color-muted)]">
+              {r.renderedAt ? new Date(r.renderedAt).toLocaleString() : "—"}
+            </span>
+            <span className={r.mode === "animated" ? "text-[var(--color-accent)] text-xs" : "text-[var(--color-muted)] text-xs"}>{r.mode}</span>
+            <span className="text-xs text-[var(--color-muted)] ml-auto">{(r.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
+          </li>
+        ))}
+      </ul>
+      {compare.length === 2 && (
+        <div className="grid grid-cols-2 gap-3">
+          {compare.map((key) => (
+            <video key={key} src={`/api/files/${encodeURIComponent(key)}`} controls className="w-full rounded-lg border border-[var(--color-border)]" />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export default function BeatDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -200,8 +248,11 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Alt beat</dt><dd>{beat.isAlt ? "yes" : "no"}</dd></div>
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Concepts taught</dt><dd>{beat.conceptsTaught.length || "—"}</dd></div>
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Concepts required</dt><dd>{beat.conceptsRequired.length || "—"}</dd></div>
+                <div className="flex justify-between"><dt className="text-[var(--color-muted)]">AI spend</dt><dd className="tabular-nums">{data.aiCostUsd > 0 ? `$${data.aiCostUsd.toFixed(3)}` : "—"}</dd></div>
               </dl>
             </Card>
+
+            <RenderHistory beatId={id} />
           </div>
         </div>
       </PageBody>
