@@ -10,8 +10,13 @@ COPY package.json package-lock.json* tsconfig.base.json ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/web/package.json ./apps/web/
 
-# Install all deps (workspace-aware)
-RUN npm ci --omit=optional || npm install
+# Install all deps (workspace-aware). Do NOT --omit=optional here:
+# lightningcss (Tailwind v4's native CSS engine) ships its linux-musl
+# binary as an optionalDependency — omitting optionals breaks `next build`
+# with a webpack/globals.css error. (This lay dormant until the root
+# package-lock.json was committed, because `npm ci` without a lockfile
+# always fell back to plain `npm install`.)
+RUN npm ci || npm install
 
 # Copy source
 COPY packages/shared ./packages/shared
