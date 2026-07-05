@@ -19,17 +19,39 @@ import { JobTimeline } from "@/components/job-timeline";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ReviewIssues } from "@/components/review-issues";
+import { ErrorState } from "@/components/error-state";
+import { useToast } from "@/lib/use-toast";
 
 export default function BeatDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, mutate, isLoading } = useSWR(`beat-${id}`, () => api.getBeat(id), { refreshInterval: 4000 });
+  const { notify } = useToast();
+  const { data, error, mutate, isLoading } = useSWR(`beat-${id}`, () => api.getBeat(id), { refreshInterval: 4000 });
+
+  /** Run an action with toast feedback — no more silent buttons. */
+  async function act(label: string, fn: () => Promise<unknown>) {
+    try {
+      await fn();
+      notify({ title: `${label} queued`, variant: "success" });
+      await mutate();
+    } catch (e) {
+      notify({ title: `${label} failed: ${e instanceof Error ? e.message : String(e)}`, variant: "destructive" });
+    }
+  }
 
   async function submitFeedback(input: { feedback: string; action: "approve" | "revise" | "reject"; screenshotKeys: string[] }) {
     await api.giveBeatFeedback(id, input);
     await mutate();
   }
 
+  if (error) {
+    return (
+      <AppShell>
+        <PageHeader title="Beat" />
+        <PageBody><ErrorState error={error} onRetry={() => mutate()} /></PageBody>
+      </AppShell>
+    );
+  }
   if (isLoading || !data) {
     return (
       <AppShell>
@@ -54,7 +76,7 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
             <Button
               size="sm"
               variant="secondary"
-              onClick={async () => { await api.authorBeat(id); await mutate(); }}
+              onClick={() => act("Author", () => api.authorBeat(id))}
             >
               <Wand2 className="w-3.5 h-3.5" />
               {beat.stage === "ingested" || beat.stage === "queued" ? "Author" : "Re-author"}
@@ -62,7 +84,7 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
             {(beat.stage === "ai_review" || beat.stage === "human_review" || beat.stage === "approved" || beat.mp4Key) && (
               <Button
                 size="sm"
-                onClick={async () => { await api.renderBeat(id); await mutate(); }}
+                onClick={() => act("Render", () => api.renderBeat(id))}
               >
                 <Film className="w-3.5 h-3.5" />
                 {beat.mp4Key ? "Re-render" : "Render"}
@@ -72,7 +94,7 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={async () => { await api.reviewBeat(id); await mutate(); }}
+                onClick={() => act("Review", () => api.reviewBeat(id))}
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Re-review

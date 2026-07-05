@@ -59,6 +59,13 @@ export const api = {
     fetchJson<{ ok: boolean; stage: BeatStage }>(`/beats/${id}/feedback`, { method: "POST", body: JSON.stringify(input) }),
   updateBeat: (id: string, patch: Partial<Beat>) =>
     fetchJson<{ beat: Beat }>(`/beats/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  /** Global job feed for the Activity page. */
+  listJobs: (params?: { status?: string; queue?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.queue) qs.set("queue", params.queue);
+    return fetchJson<{ jobs: ActivityJob[] }>(`/jobs${qs.toString() ? `?${qs}` : ""}`);
+  },
   listBeatJobs: (beatId: string) =>
     fetchJson<{ jobs: Array<{ id: string; queue: string; status: string; attempts: number; startedAt: string | null; endedAt: string | null; etaSeconds: number | null; errorMessage: string | null; createdAt: string }> }>(`/jobs?beatId=${beatId}`),
 
@@ -190,6 +197,23 @@ export interface JobSummary {
 
 export interface LessonJobSummary extends JobSummary {
   queue: string;
+  createdAt: string;
+}
+
+/** Row shape of the global /jobs feed. */
+export interface ActivityJob {
+  id: string;
+  queue: string; // ingest | author | ai_review | holistic | render | stitch | scorm_build | audit
+  beatId: string | null;
+  lessonId: string | null;
+  materialId: string | null;
+  status: string; // queued | running | succeeded | failed
+  attempts: number;
+  progressNote: string | null;
+  errorMessage: string | null;
+  etaSeconds: number | null;
+  startedAt: string | null;
+  endedAt: string | null;
   createdAt: string;
 }
 

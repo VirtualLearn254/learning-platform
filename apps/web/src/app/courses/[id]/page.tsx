@@ -13,6 +13,7 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 import { CourseTree } from "@/components/course-tree";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { ErrorState } from "@/components/error-state";
 
 function JobStatusBadge({ job, ingestedAt }: { job: JobSummary | null; ingestedAt: string | null }) {
   if (job?.status === "running")    return <Badge variant="accent">running</Badge>;
@@ -50,7 +51,7 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
       },
     },
   );
-  const { data: treeData, mutate: refreshTree } = useSWR(
+  const { data: treeData, error: treeError, mutate: refreshTree } = useSWR(
     `course-tree-${id}`,
     () => api.getCourseTree(id),
     { refreshInterval: (latest) => latest?.tree.sections.length ? 0 : (materialsData?.materials.length ? 4000 : 0) },
@@ -63,6 +64,14 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
     await Promise.all([refreshMaterials(), refreshTree()]);
   }
 
+  if (treeError) {
+    return (
+      <AppShell>
+        <PageHeader title="Course" />
+        <PageBody><ErrorState error={treeError} onRetry={() => refreshTree()} /></PageBody>
+      </AppShell>
+    );
+  }
   if (!treeData) {
     return (
       <AppShell>

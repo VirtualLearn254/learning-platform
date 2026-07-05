@@ -15,9 +15,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ErrorState } from "@/components/error-state";
 
 export default function CoursesPage() {
-  const { data, mutate, isLoading } = useSWR("courses", () => api.listCourses());
+  const { data, error, mutate, isLoading } = useSWR("courses", () => api.listCourses());
   const courses = data?.courses ?? [];
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -73,7 +74,9 @@ export default function CoursesPage() {
         }
       />
       <PageBody>
-        {isLoading ? (
+        {error ? (
+          <ErrorState error={error} onRetry={() => mutate()} />
+        ) : isLoading ? (
           <p className="text-sm text-[var(--color-muted)]">Loading…</p>
         ) : courses.length === 0 ? (
           <Card className="p-12 text-center">

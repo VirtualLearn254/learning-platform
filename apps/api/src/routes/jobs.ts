@@ -9,11 +9,13 @@ export const jobsRoute = new Hono()
     const beatId = c.req.query("beatId");
     const lessonId = c.req.query("lessonId");
     const status = c.req.query("status");
+    const queue = c.req.query("queue");
     const where = and(
       ...[
         beatId ? eq(tables.jobs.beatId, beatId) : undefined,
         lessonId ? eq(tables.jobs.lessonId, lessonId) : undefined,
         status ? eq(tables.jobs.status, status) : undefined,
+        queue ? eq(tables.jobs.queue, queue) : undefined,
       ].filter(Boolean) as never,
     );
     const rows = await db.select().from(tables.jobs)

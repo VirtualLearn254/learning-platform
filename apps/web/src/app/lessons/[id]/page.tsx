@@ -13,6 +13,7 @@ import { BeatCard } from "@/components/beat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ReviewIssues } from "@/components/review-issues";
+import { ErrorState } from "@/components/error-state";
 import { useToast } from "@/lib/use-toast";
 
 function JobPill({ label, job }: { label: string; job: LessonJobSummary | null }) {
@@ -44,7 +45,7 @@ function JobPill({ label, job }: { label: string; job: LessonJobSummary | null }
 
 export default function LessonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, mutate, isLoading } = useSWR(`lesson-${id}`, () => api.getLesson(id), { refreshInterval: 5000 });
+  const { data, error, mutate, isLoading } = useSWR(`lesson-${id}`, () => api.getLesson(id), { refreshInterval: 5000 });
   const { notify } = useToast();
 
   async function authorAll(reauthor = false) {
@@ -112,6 +113,14 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
     }
   }
 
+  if (error) {
+    return (
+      <AppShell>
+        <PageHeader title="Lesson" />
+        <PageBody><ErrorState error={error} onRetry={() => mutate()} /></PageBody>
+      </AppShell>
+    );
+  }
   if (isLoading || !data) {
     return (
       <AppShell>
