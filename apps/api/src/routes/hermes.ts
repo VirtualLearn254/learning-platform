@@ -1,47 +1,57 @@
 /**
- * Hermes bridge routes — two-way RPC surface.
+ * Hermes routes — the evolution loop, now implemented locally (the remote-RPC
+ * bridge stub is retired).
  *
- * The app uses these endpoints to:
- *   • trigger an evolution run
- *   • list pending style candidates and approve/reject them
- *   • view Hermes' memory log
+ *   POST /runs            → start an evolution run (analyzes feedback +
+ *                           review issues + render fallbacks, proposes
+ *                           pending pipeline rules)
+ *   GET  /runs            → run history with status + proposal counts
+ *   GET  /memories        → rules Hermes has proposed (pending + adopted)
  *
- * Hermes (running on a different process) calls back into the API via
- * the regular CRUD routes (courses, beats, materials, etc.) to do its work.
+ * Style-candidate endpoints are kept for UI compatibility but return empty
+ * until the style-evolution phase lands.
  */
 
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
+import { desc, like } from "drizzle-orm";
 
-import { hermes } from "../workers/services.js";
+import { db, tables } from "../db/index.js";
+import { runEvolution, listRuns } from "../lib/hermes.js";
 
 export const hermesRoute = new Hono()
   .get("/runs", async (c) => {
-    const runs = await hermes.listEvolutionRuns(10);
-    return c.json({ runs });
+    const rows = await listRuns(10);
+    return c.json({
+      runs: rows.map((r) => ({
+        runId: r.id,
+        startedAt: r.startedAt.toISOString(),
+        completedAt: r.completedAt?.toISOString() ?? null,
+        status: r.status,
+        beatsReviewed: r.beatsReviewed,
+        stylesProposed: r.rulesProposed, // UI field name kept; semantics = proposed rules
+        notes: r.notes,
+      })),
+    });
   })
   .post("/runs", zValidator("json", z.object({ beatLimit: z.number().int().positive().optional() })), async (c) => {
     const { beatLimit } = c.req.valid("json");
-    const result = await hermes.triggerEvolutionRun({ beatLimit });
+    const result = await runEvolution({ beatLimit });
     return c.json(result, 202);
   })
-  .get("/styles/pending", async (c) => {
-    const candidates = await hermes.listPendingStyleCandidates();
-    return c.json({ candidates });
-  })
-  .post("/styles/:id/approve", async (c) => {
-    const id = c.req.param("id");
-    const result = await hermes.approveStyle(id);
-    return c.json(result);
-  })
-  .post("/styles/:id/reject", zValidator("json", z.object({ reason: z.string().min(1) })), async (c) => {
-    const id = c.req.param("id");
-    const { reason } = c.req.valid("json");
-    const result = await hermes.rejectStyle(id, reason);
-    return c.json(result);
-  })
+  .get("/styles/pending", (c) => c.json({ candidates: [] }))
+  .post("/styles/:id/approve", (c) => c.json({ ok: false, error: "style evolution not yet implemented" }, 501))
+  .post("/styles/:id/reject", (c) => c.json({ ok: false, error: "style evolution not yet implemented" }, 501))
   .get("/memories", async (c) => {
-    const memories = await hermes.listMemories(50);
-    return c.json({ memories });
+    const rows = await db.select().from(tables.pipelineRules)
+      .where(like(tables.pipelineRules.origin, "hermes%"))
+      .orderBy(desc(tables.pipelineRules.createdAt)).limit(50);
+    return c.json({
+      memories: rows.map((r) => ({
+        id: r.id, scope: r.scope, rule: r.rule, origin: r.origin,
+        status: r.active ? "adopted" : "pending",
+        createdAt: r.createdAt.toISOString(),
+      })),
+    });
   });

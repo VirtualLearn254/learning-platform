@@ -34,6 +34,8 @@ import { renderAnimatedMp4 } from "../lib/hf-render.js";
 import { verifyComposition, captureTimelineFrames, sampleTimes } from "../lib/hf-verifier.js";
 import { getAIClient } from "../lib/ai_client.js";
 import { ensureFresh, getProfileOverride } from "../lib/profiles_store.js";
+import { getRulesBlock } from "../lib/rules.js";
+import { ensureDesignBrief } from "../lib/design-brief.js";
 
 interface JobData {
   beatId: string;
@@ -131,6 +133,11 @@ export function startRenderWorker() {
             || (designerOverride?.maxTokens != null && designerOverride.maxTokens < 12000);
           if (compact) await note("compact design mode (tight output window)");
 
+          // Institutional memory: operator rules + the lesson-wide design brief.
+          const operatorRules = await getRulesBlock("designer");
+          const siblingKeys = (await db.select().from(tables.beats).where(eq(tables.beats.lessonId, beat.lessonId))).filter(b=>!b.isAlt).map(b=>b.beatKey);
+          const designBrief = await ensureDesignBrief(ai, beat.lessonId, { lessonTitle, styleHint: visual.style ?? styleHints?.style, beatKeys: siblingKeys }) ?? undefined;
+
           const designInput: DesignBeatInput = {
             beatKey: beat.beatKey,
             beatType: beat.beatType,
@@ -143,6 +150,8 @@ export function startRenderWorker() {
             wordTimestamps,
             compact,
             meta: { beatId, lessonId: beat.lessonId },
+            operatorRules,
+            designBrief,
           };
           const design = await designAnimatedBeat(ai, designInput, note);
           let finalHtml = design.html;

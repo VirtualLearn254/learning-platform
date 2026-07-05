@@ -15,6 +15,7 @@ import { db, tables } from "../db/index.js";
 import { QueueNames, queues } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
 import { getAIClient } from "../lib/ai_client.js";
+import { getRulesBlock } from "../lib/rules.js";
 
 interface JobData { beatId: string; isRevision: boolean }
 
@@ -26,9 +27,22 @@ const VisualSpecOut = z.object({
   callouts: z.array(z.string().min(1).max(80)).min(0).max(4).default([]),
 });
 
+const QuizOut = z.object({
+  type: z.enum(["multiple_choice", "match", "fill_in", "scenario", "likert"]),
+  question: z.string().min(5).max(500),
+  bloomLevel: z.enum(["remember", "understand", "apply", "analyze", "evaluate", "create"]).optional(),
+  options: z.array(z.object({
+    id: z.string(),
+    text: z.string().max(300),
+    isCorrect: z.boolean().optional(),
+    feedback: z.string().max(300).optional(),
+  })).min(2).max(6),
+}).optional();
+
 const AuthorOutput = z.object({
   script: z.string().min(60).max(1500),
   visualSpec: VisualSpecOut,
+  quiz: QuizOut,
   conceptsTaught: z.array(z.string().min(1).max(64)).min(0).max(5).default([]),
   conceptsRequired: z.array(z.string().min(1).max(64)).min(0).max(5).default([]),
 });
@@ -64,7 +78,7 @@ PEDAGOGY RULES (strict — these are non-negotiable):
 - Hook beats: open with a question or a surprising fact that motivates the topic.
 - Concept beats: teach ONE idea cleanly. Define -> intuition -> mini-example.
 - Example beats: walk a worked example step by step, stating numbers explicitly.
-- Check beats: pose a single question that tests understanding. Do NOT give the answer.
+- Check beats: pose a single question that tests understanding. Do NOT give the answer in the narration. ALSO include a "quiz" field in your JSON (only for check beats): {"type": "multiple_choice"|"fill_in"|"match"|"scenario", "question": string, "bloomLevel": "remember"|"understand"|"apply"|"analyze", "options": [{"id": "a", "text": string, "isCorrect": boolean, "feedback": one-line WHY it is right/wrong}]}. 3-4 options; distractors must target REAL misconceptions from this lesson (a plausible wrong step), never random noise. Type: computation -> fill_in (options are candidate answers), definitions/classification -> multiple_choice, judgment -> scenario.
 - Recap beats: summarise the lesson's main ideas in 2-3 lines.
 
 VISUAL SPEC RULES:
@@ -209,7 +223,7 @@ export function startAuthorWorker() {
 
       const ai = await client.chat("author", {
         messages: [
-          { role: "system", content: buildSystemPrompt() },
+          { role: "system", content: buildSystemPrompt() + await getRulesBlock("author") },
           { role: "user", content: userPrompt },
         ],
         jsonMode: true,
@@ -225,6 +239,7 @@ export function startAuthorWorker() {
       await db.update(tables.beats).set({
         script: out.script,
         visualSpec: out.visualSpec,
+        ...(beat.beatType === "check" && out.quiz ? { quiz: out.quiz } : {}),
         conceptsTaught: out.conceptsTaught,
         conceptsRequired: out.conceptsRequired,
         stage: "ai_review",

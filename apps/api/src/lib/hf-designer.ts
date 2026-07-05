@@ -41,6 +41,10 @@ export interface DesignBeatInput {
   repairNotes?: string;
   /** Usage-attribution context — flows into ai_usage rows. */
   meta?: { beatId?: string; lessonId?: string };
+  /** Pre-formatted operator-rules prompt block (institutional memory). */
+  operatorRules?: string;
+  /** Per-lesson visual-language brief — shared design system for sibling beats. */
+  designBrief?: string;
 }
 
 const SYSTEM_PROMPT = `You are a motion designer authoring HyperFrames video compositions — HTML files that a capture engine renders frame-by-frame into MP4. You design educational explainer beats for an adult professional audience: editorial, confident, never cartoonish.
@@ -191,6 +195,7 @@ export function buildDesignerPrompt(input: DesignBeatInput): { system: string; u
   const settleAt = Math.max(1, dur - 1).toFixed(1);
   const palette = STYLE_PALETTES[input.styleHint ?? ""] ?? STYLE_PALETTES["swiss-grid"]!;
   const skeleton = buildSkeleton(palette, dur);
+  const system = SYSTEM_PROMPT + (input.operatorRules ?? "");
 
   const user = `Design the composition for this beat.
 
@@ -231,7 +236,10 @@ ${input.onScreenText.map((t, i) => `${i + 1}. ${t}`).join("\n") || "(none — de
 CALLOUT CHIPS (small supporting labels, optional placement):
 ${input.callouts.join(" · ") || "(none)"}
 
-STYLE: ${input.styleHint ?? "swiss-grid"} — ${palette.desc}. Colors come ONLY from the skeleton's CSS variables.
+STYLE: ${input.styleHint ?? "swiss-grid"} — ${palette.desc}. Colors come ONLY from the skeleton's CSS variables.${input.designBrief ? `
+
+LESSON DESIGN BRIEF (shared visual language — every beat in this lesson follows it):
+${input.designBrief}` : ""}
 
 ${input.wordTimestamps && input.wordTimestamps.length > 0 ? `WORD TIMINGS (whisper-aligned; "word@seconds"). Anchor each on-screen reveal to the moment its phrase is SPOKEN — start the entrance 0.1-0.2s before the first word of the phrase:
 ${input.wordTimestamps.map((w) => `${w.word.trim()}@${w.start.toFixed(1)}`).join(" ")}
@@ -241,7 +249,7 @@ Phase the visuals to follow the narration's idea order, using the word timings a
 PREVIOUS ATTEMPT FAILED VALIDATION — fix these issues:
 ${input.repairNotes}` : ""}`;
 
-  return { system: SYSTEM_PROMPT, user };
+  return { system, user };
 }
 
 // ─── Static lint: catch contract violations before spending render time ───

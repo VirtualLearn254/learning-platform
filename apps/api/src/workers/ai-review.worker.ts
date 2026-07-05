@@ -18,6 +18,7 @@ import { db, tables, type ReviewIssue } from "../db/index.js";
 import { QueueNames, queues } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
 import { getAIClient } from "../lib/ai_client.js";
+import { getRulesBlock } from "../lib/rules.js";
 
 const PASS_THRESHOLD = 90;
 const REVISE_THRESHOLD = 70;
@@ -154,7 +155,7 @@ export function startAIReviewWorker() {
       const client = await getAIClient();
       const ai = await client.chat("reviewer", {
         messages: [
-          { role: "system", content: buildSystemPrompt() },
+          { role: "system", content: buildSystemPrompt() + await getRulesBlock("reviewer") },
           { role: "user", content: buildUserPrompt({
             courseTitle: course?.title ?? "",
             lessonTitle: lesson?.title ?? "",

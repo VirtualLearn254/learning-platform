@@ -12,6 +12,11 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
     ...init,
   });
+  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    // Session missing/expired — bounce to login rather than surfacing errors on every card.
+    window.location.href = "/login";
+    throw new Error("Not signed in — redirecting to login.");
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`HTTP ${res.status} ${res.statusText}: ${body.slice(0, 200)}`);

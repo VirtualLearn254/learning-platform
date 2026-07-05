@@ -64,12 +64,32 @@ export function startScormWorker() {
       await note(`downloading master mp4`);
       const master = await s3.getObject(lesson.masterMp4Key);
       const masterBuf = Buffer.from(master.body);
-      await note(`master ${(masterBuf.length / 1024 / 1024).toFixed(2)} MB · building zip`);
+
+      // Interactive quiz cues: quiz beats pause the player near the END of
+      // their segment (the narration poses the question first). Offsets come
+      // from cumulative beat durations in stitch order.
+      const mainBeats = beats.filter((b) => !b.isAlt);
+      const quizzes: Array<{ atSec: number; beatKey: string; quiz: { type: string; question: string; options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> } }> = [];
+      let offset = 0;
+      for (const b of mainBeats) {
+        const dur = b.durationSeconds ?? 0;
+        const quiz = b.quiz as { type?: string; question?: string; options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> } | null;
+        if (quiz?.question && Array.isArray(quiz.options) && quiz.options.length >= 2) {
+          quizzes.push({
+            atSec: Math.max(0, offset + dur - 0.4),
+            beatKey: b.beatKey,
+            quiz: { type: quiz.type ?? "multiple_choice", question: quiz.question, options: quiz.options },
+          });
+        }
+        offset += dur;
+      }
+      await note(`master ${(masterBuf.length / 1024 / 1024).toFixed(2)} MB · ${quizzes.length} quiz cue(s) · building zip`);
 
       const built = await scormPackager.build({
         lesson: { id: lesson.id, title: lesson.title, summary: lesson.summary },
         beats: beats as never,
         masterMp4: masterBuf,
+        quizzes,
         branding: { organizationName: "Learning Platform" },
         version: "2004_4",
       });

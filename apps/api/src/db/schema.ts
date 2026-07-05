@@ -66,6 +66,10 @@ export const lessons = pgTable("lessons", {
   order: integer("order").notNull(),
   voicePreference: jsonb("voice_preference"),
   styleHints: jsonb("style_hints"),
+  /** Per-lesson visual-language doc: generated once on first render, injected
+   *  into every beat's designer prompt so sibling beats share one design
+   *  system (eyebrow format, card treatment, decorative motifs, devices). */
+  designBrief: text("design_brief"),
   masterMp4Key: text("master_mp4_key"),
   /** S3 key for the SCORM zip once published. */
   scormPackageKey: text("scorm_package_key"),
@@ -223,6 +227,37 @@ export const aiProfileOverrides = pgTable("ai_profile_overrides", {
  * Cost is computed at log time from the price catalog so future price
  * changes don't retroactively change historical numbers.
  */
+/**
+ * Institutional memory: operator rules injected into AI prompts by scope.
+ * A correction made once ("never dark backgrounds on math lessons") becomes
+ * a durable rule applied to every future beat in every course. Rows with
+ * active=false are pending proposals (mostly from Hermes) awaiting approval.
+ */
+export const pipelineRules = pgTable("pipeline_rules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Which AI role's prompt this rule is appended to. */
+  scope: text("scope").notNull(), // "author" | "designer" | "reviewer" | "ingest"
+  rule: text("rule").notNull(),
+  /** Who created it: "operator" (Settings UI) or "hermes" (evolution run). */
+  origin: text("origin").default("operator").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  scopeIdx: index("pipeline_rules_scope_idx").on(t.scope, t.active),
+}));
+
+/** Hermes evolution runs: each run analyzes recent feedback + verifier
+ *  issues + revise reasons and proposes pipeline rules (active=false). */
+export const hermesRuns = pgTable("hermes_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  status: text("status").default("running").notNull(), // running | succeeded | failed
+  beatsReviewed: integer("beats_reviewed").default(0).notNull(),
+  rulesProposed: integer("rules_proposed").default(0).notNull(),
+  notes: text("notes").default("").notNull(),
+});
+
 export const aiUsage = pgTable("ai_usage", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   ts: timestamp("ts", { withTimezone: true }).defaultNow().notNull(),

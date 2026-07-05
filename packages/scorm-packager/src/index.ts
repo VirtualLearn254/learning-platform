@@ -84,8 +84,9 @@ function buildManifest(lesson: { id: string; title: string; summary?: string | n
  *   - Marks incomplete + disconnects on unload
  *   - Records session_time via native LMS clock (no manual tracking needed)
  */
-function buildPlayerHtml(lesson: { title: string }): string {
+function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): string {
   const title = htmlEscape(lesson.title);
+  const quizJson = JSON.stringify(quizzes).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -112,6 +113,33 @@ function buildPlayerHtml(lesson: { title: string }): string {
     pointer-events: none;
   }
   .status.complete { color: #34D399; }
+  /* ── Quiz overlay ── */
+  .quiz-overlay {
+    position: absolute; inset: 0; display: none;
+    background: rgba(10,10,10,0.88); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  .quiz-overlay.open { display: flex; }
+  .quiz-card {
+    width: 100%; max-width: 640px; background: #16181c;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 32px;
+  }
+  .quiz-eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #34D399; margin-bottom: 10px; }
+  .quiz-q { font-size: 22px; font-weight: 600; line-height: 1.35; margin-bottom: 20px; }
+  .quiz-opt {
+    display: block; width: 100%; text-align: left; margin: 8px 0; padding: 14px 16px;
+    background: #1e2126; color: #eee; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px; font-size: 16px; cursor: pointer; font-family: inherit;
+  }
+  .quiz-opt:hover:not(:disabled) { border-color: #34D399; }
+  .quiz-opt.correct { border-color: #34D399; background: rgba(52,211,153,0.12); }
+  .quiz-opt.wrong { border-color: #F87171; background: rgba(248,113,113,0.12); }
+  .quiz-feedback { margin-top: 14px; font-size: 14px; color: rgba(255,255,255,0.75); line-height: 1.45; min-height: 20px; }
+  .quiz-continue {
+    margin-top: 18px; padding: 12px 28px; background: #34D399; color: #08221a;
+    border: 0; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; display: none;
+  }
+  .quiz-continue.show { display: inline-block; }
 </style>
 </head>
 <body>
@@ -119,26 +147,98 @@ function buildPlayerHtml(lesson: { title: string }): string {
     <div class="title-badge">${title}</div>
     <video id="v" src="master.mp4" controls autoplay preload="metadata" playsinline></video>
     <div class="status" id="status">connecting…</div>
+    <div class="quiz-overlay" id="qz">
+      <div class="quiz-card">
+        <div class="quiz-eyebrow">Check your understanding</div>
+        <div class="quiz-q" id="qz-q"></div>
+        <div id="qz-opts"></div>
+        <div class="quiz-feedback" id="qz-fb"></div>
+        <button class="quiz-continue" id="qz-go">Continue ▸</button>
+      </div>
+    </div>
   </div>
 <script>
 (function() {
+  var QUIZZES = ${quizJson};
   var scorm = window.createScormApi();
   var status = document.getElementById('status');
   var connected = scorm.connect();
   status.textContent = connected ? 'connected · in progress' : 'standalone (no LMS)';
 
   var video = document.getElementById('v');
+  var overlay = document.getElementById('qz');
   var completed = false;
+  var asked = {};           // cue index -> true once shown
+  var correctCount = 0;
+  var answeredCount = 0;
+
+  function showQuiz(cue, idx) {
+    asked[idx] = true;
+    video.pause();
+    document.getElementById('qz-q').textContent = cue.quiz.question;
+    var fb = document.getElementById('qz-fb');
+    var go = document.getElementById('qz-go');
+    fb.textContent = '';
+    go.classList.remove('show');
+    var box = document.getElementById('qz-opts');
+    box.innerHTML = '';
+    var answered = false;
+    cue.quiz.options.forEach(function(opt) {
+      var b = document.createElement('button');
+      b.className = 'quiz-opt';
+      b.textContent = opt.text;
+      b.onclick = function() {
+        if (answered) return;
+        answered = true;
+        answeredCount++;
+        var right = !!opt.isCorrect;
+        if (right) correctCount++;
+        b.className = 'quiz-opt ' + (right ? 'correct' : 'wrong');
+        // Reveal the correct one when the learner missed it.
+        if (!right) {
+          Array.prototype.forEach.call(box.children, function(el, i) {
+            if (cue.quiz.options[i] && cue.quiz.options[i].isCorrect) el.className = 'quiz-opt correct';
+          });
+        }
+        fb.textContent = opt.feedback || (right ? 'Correct.' : 'Not quite — the highlighted answer is correct.');
+        Array.prototype.forEach.call(box.children, function(el) { el.disabled = true; });
+        go.classList.add('show');
+      };
+      box.appendChild(b);
+    });
+    go.onclick = function() {
+      overlay.classList.remove('open');
+      video.play();
+    };
+    overlay.classList.add('open');
+  }
+
+  if (QUIZZES.length > 0) {
+    video.addEventListener('timeupdate', function() {
+      if (overlay.classList.contains('open')) return;
+      for (var i = 0; i < QUIZZES.length; i++) {
+        if (!asked[i] && video.currentTime >= QUIZZES[i].atSec) {
+          showQuiz(QUIZZES[i], i);
+          break;
+        }
+      }
+    });
+  }
 
   video.addEventListener('ended', function() {
     if (completed) return;
     completed = true;
+    var pct = QUIZZES.length > 0 && answeredCount > 0
+      ? Math.round((correctCount / QUIZZES.length) * 100)
+      : 100; // plain video: watching to the end is full marks
     if (connected) {
       scorm.setStatus('completed');
-      scorm.setScore(0, 100, 100);
+      scorm.setScore(0, 100, pct);
       scorm.commit();
     }
-    status.textContent = 'complete';
+    status.textContent = QUIZZES.length > 0
+      ? 'complete · score ' + pct + '% (' + correctCount + '/' + QUIZZES.length + ')'
+      : 'complete';
     status.classList.add('complete');
   });
 
@@ -169,12 +269,27 @@ g.createScormApi=createScormApi})(window);`;
 
 // ─── Types ──────────────────────────────────────────────────────────
 
+/** One interactive quiz, cued to a timestamp in the master video. */
+export interface ScormQuizCue {
+  /** Seconds into the master video where the player pauses and asks. */
+  atSec: number;
+  beatKey: string;
+  quiz: {
+    type: string;
+    question: string;
+    options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>;
+  };
+}
+
 export interface ScormBuildInput {
   lesson: Pick<Lesson, "id" | "title" | "summary">;
   /** Beats aren't required for a plain master-video SCO but accepted for future use. */
   beats?: Beat[];
   /** Raw MP4 bytes of the master video. */
   masterMp4: Buffer;
+  /** Interactive quiz cues — the player pauses at each, asks, records, resumes.
+   *  Answers roll up into the SCORM score; empty/omitted = plain video SCO. */
+  quizzes?: ScormQuizCue[];
   /** Optional branding. */
   branding?: {
     organizationName?: string;
@@ -201,7 +316,7 @@ export function createScormPackager(): ScormPackager {
     async build(input) {
       const zip = new JSZip();
       zip.file("imsmanifest.xml", buildManifest(input.lesson, { organization: input.branding?.organizationName }));
-      zip.file("index.html", buildPlayerHtml(input.lesson));
+      zip.file("index.html", buildPlayerHtml(input.lesson, input.quizzes ?? []));
       zip.file("scorm-api.js", SCORM_API_JS);
       zip.file("master.mp4", input.masterMp4);
 
