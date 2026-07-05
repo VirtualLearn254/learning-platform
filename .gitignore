@@ -42,3 +42,5 @@ apps/api/scripts/playground-out.mp4
 apps/api/scripts/playground-frame-*.png
 apps/api/scripts/glm-output.html
 apps/api/scripts/beat-data.json
+apps/api/scripts/fw-response.json
+apps/api/scripts/glm-final.html
