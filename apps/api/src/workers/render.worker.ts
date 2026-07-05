@@ -32,7 +32,7 @@ import { buildBeatHtmlHF, type BeatStyle } from "../lib/hf-templates.js";
 import { designAnimatedBeat, type DesignBeatInput } from "../lib/hf-designer.js";
 import { renderAnimatedMp4 } from "../lib/hf-render.js";
 import { verifyComposition } from "../lib/hf-verifier.js";
-import { ai } from "./services.js";
+import { getAIClient } from "../lib/ai_client.js";
 
 interface JobData {
   beatId: string;
@@ -105,6 +105,11 @@ export function startRenderWorker() {
 
       if (ANIMATED_ENABLED && !staticOnly) {
         try {
+          // DB-secrets AI client (anthropic + profile overrides + usage logging)
+          // — same client the author/review workers use. The env-only client in
+          // services.ts has no anthropic provider and must not be used here.
+          const ai = await getAIClient();
+
           // Phase 2: whisper word timestamps — reveals anchor to spoken words.
           await note("aligning word timestamps (whisper)");
           const wordTimestamps = await transcribeWords(mp3);
