@@ -102,6 +102,7 @@ export function startRenderWorker() {
       let mp4: Buffer | null = null;
       let htmlKey: string | null = null;
       let renderMode: "animated" | "static" = "static";
+      let animatedFailReason: string | null = null;
 
       if (ANIMATED_ENABLED && !staticOnly) {
         try {
@@ -185,6 +186,7 @@ export function startRenderWorker() {
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.warn(`[render:${jobId.slice(0, 8)}] animated path failed, falling back to static:`, msg);
+          animatedFailReason = msg.slice(0, 300);
           await note(`animated failed (${msg.slice(0, 100)}) — falling back to static frame`);
           mp4 = null;
         }
@@ -223,6 +225,9 @@ export function startRenderWorker() {
       await db.update(tables.jobs).set({
         status: "succeeded",
         progressNote: `done (${renderMode}) · ${durationSec.toFixed(1)}s · ${(mp4.length / 1024 / 1024).toFixed(1)} MB`,
+        // Preserve WHY the animated path fell back — the progress note gets
+        // overwritten as the job proceeds, and we keep losing the cause.
+        errorMessage: animatedFailReason ? `animated fallback: ${animatedFailReason}` : null,
         endedAt: new Date(),
       }).where(eq(tables.jobs.id, jobId));
 
