@@ -10,16 +10,15 @@ export const jobsRoute = new Hono()
     const lessonId = c.req.query("lessonId");
     const status = c.req.query("status");
     const queue = c.req.query("queue");
-    const where = and(
-      ...[
-        beatId ? eq(tables.jobs.beatId, beatId) : undefined,
-        lessonId ? eq(tables.jobs.lessonId, lessonId) : undefined,
-        status ? eq(tables.jobs.status, status) : undefined,
-        queue ? eq(tables.jobs.queue, queue) : undefined,
-      ].filter(Boolean) as never,
-    );
+    const conds = [
+      beatId ? eq(tables.jobs.beatId, beatId) : undefined,
+      lessonId ? eq(tables.jobs.lessonId, lessonId) : undefined,
+      status ? eq(tables.jobs.status, status) : undefined,
+      queue ? eq(tables.jobs.queue, queue) : undefined,
+    ].filter((c): c is NonNullable<typeof c> => c !== undefined);
+    const where = conds.length > 0 ? and(...conds) : undefined;
     const rows = await db.select().from(tables.jobs)
-      .where(where as never)
+      .where(where)
       .orderBy(desc(tables.jobs.createdAt))
       .limit(100);
     return c.json({ jobs: rows });
