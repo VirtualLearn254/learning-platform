@@ -111,18 +111,24 @@ Reply with ONLY a JSON object, no markdown:
 {"issues":[{"severity":"P0","frame":1,"description":"...","fix":"concrete CSS/layout change"}]}
 Empty issues array = pass.`;
 
-export async function verifyComposition(
-  ai: AIClient,
-  html: string,
-  durationSec: number,
-): Promise<VerifyResult> {
-  // Sample: mid-entrance, hero (fullest), settled tail.
-  const times = [
+/** The 3 sample times used everywhere: mid-entrance, hero (fullest), settled tail. */
+export function sampleTimes(durationSec: number): number[] {
+  return [
     Math.min(2.5, durationSec * 0.2),
     durationSec * 0.65,
     Math.max(0.5, durationSec - 1.2),
   ];
-  const frames = await captureTimelineFrames(html, times);
+}
+
+export async function verifyComposition(
+  ai: AIClient,
+  html: string,
+  durationSec: number,
+  /** Pre-captured frames (e.g. already uploaded to S3) — captured fresh when omitted. */
+  precapturedFrames?: Buffer[],
+): Promise<VerifyResult> {
+  const times = sampleTimes(durationSec);
+  const frames = precapturedFrames ?? await captureTimelineFrames(html, times);
 
   const res = await ai.vision("verifier", {
     system: VERIFY_SYSTEM,

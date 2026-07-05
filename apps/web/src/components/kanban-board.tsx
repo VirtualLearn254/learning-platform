@@ -12,12 +12,12 @@ const COLUMNS: { stage: BeatStage; label: string }[] = [
   { stage: "human_review", label: "Needs review" },
   { stage: "revising",     label: "Revising" },
   { stage: "rendering",    label: "Rendering" },
-  { stage: "approved",     label: "Approved" },
+  { stage: "approved",     label: "Rendered" }, // stage id is historical; render sets it after MP4 lands
   { stage: "stitched",     label: "Stitched" },
   { stage: "published",    label: "Published" },
 ];
 
-export function KanbanBoard({ beats }: { beats: Beat[] }) {
+export function KanbanBoard({ beats, onAction }: { beats: Beat[]; onAction?: () => void }) {
   const byStage: Record<BeatStage, Beat[]> = COLUMNS.reduce((acc, col) => {
     acc[col.stage] = [];
     return acc;
@@ -37,7 +37,7 @@ export function KanbanBoard({ beats }: { beats: Beat[] }) {
               {byStage[col.stage].length === 0 && (
                 <p className="text-xs text-[var(--color-muted)] py-8 text-center">—</p>
               )}
-              {byStage[col.stage].map((b) => <BeatCard key={b.id} beat={b} compact />)}
+              {byStage[col.stage].map((b) => <BeatCard key={b.id} beat={b} compact onAction={onAction} />)}
             </div>
           </div>
         ))}

@@ -1,7 +1,9 @@
 "use client";
 
 import { use } from "react";
+import Link from "next/link";
 import useSWR from "swr";
+import { Play, Square } from "lucide-react";
 
 import { api, type JobSummary } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
@@ -14,6 +16,7 @@ import { CourseTree } from "@/components/course-tree";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ErrorState } from "@/components/error-state";
+import { useToast } from "@/lib/use-toast";
 
 function JobStatusBadge({ job, ingestedAt }: { job: JobSummary | null; ingestedAt: string | null }) {
   if (job?.status === "running")    return <Badge variant="accent">running</Badge>;
@@ -54,8 +57,39 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
   const { data: treeData, error: treeError, mutate: refreshTree } = useSWR(
     `course-tree-${id}`,
     () => api.getCourseTree(id),
-    { refreshInterval: (latest) => latest?.tree.sections.length ? 0 : (materialsData?.materials.length ? 4000 : 0) },
+    // Poll the tree while autopilot runs so lesson lanes tick live.
+    { refreshInterval: (latest) => latest?.tree.sections.length ? 5000 : (materialsData?.materials.length ? 4000 : 0) },
   );
+  const { data: courseData, mutate: refreshCourse } = useSWR(
+    `course-${id}`,
+    () => api.getCourse(id),
+    { refreshInterval: 10000 },
+  );
+  const { notify } = useToast();
+  const autopilot = courseData?.course.autopilot ?? false;
+
+  async function runCourse() {
+    try {
+      const r = await api.runCourse(id);
+      notify({
+        title: `Conductor on — ${r.authorQueued} to author, ${r.renderQueued} to render (of ${r.totalBeats} beats). Everything chains automatically.`,
+        variant: "success",
+      });
+      refreshCourse(); refreshTree();
+    } catch (e) {
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    }
+  }
+
+  async function stopCourse() {
+    try {
+      await api.stopCourse(id);
+      notify({ title: "Autopilot off — in-flight jobs finish, nothing new auto-chains.", variant: "success" });
+      refreshCourse();
+    } catch (e) {
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    }
+  }
 
   async function handleUpload(files: File[]) {
     for (const file of files) {
@@ -86,6 +120,20 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
   const tree = treeData.tree;
   const materials = materialsData?.materials ?? [];
 
+  // Per-lesson pipeline roll-up for the conductor lanes.
+  const lessonLanes = tree.sections.flatMap((s) =>
+    s.modules.flatMap((m) =>
+      m.lessons.map((l) => {
+        const main = l.beats.filter((b) => !b.isAlt);
+        const rendered = main.filter((b) => !!b.mp4Key).length;
+        const done = main.filter((b) => b.stage === "stitched" || b.stage === "published").length;
+        const failed = main.filter((b) => b.status === "failed").length;
+        return { id: l.id, title: l.title, total: main.length, rendered, done, failed };
+      }),
+    ),
+  );
+  const anyBeats = lessonLanes.some((l) => l.total > 0);
+
   return (
     <AppShell>
       <PageHeader
@@ -95,8 +143,56 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
           { kind: "courses-root", id: null, title: "Courses" },
           { kind: "course", id: tree.id, title: tree.title },
         ]} />}
+        actions={
+          anyBeats ? (
+            autopilot ? (
+              <Button variant="secondary" onClick={stopCourse}>
+                <Square className="w-4 h-4" /> Stop autopilot
+              </Button>
+            ) : (
+              <Button onClick={runCourse}>
+                <Play className="w-4 h-4" /> Run course
+              </Button>
+            )
+          ) : undefined
+        }
       />
       <PageBody>
+        {/* Conductor lanes: one row per lesson, live while autopilot runs */}
+        {anyBeats && (
+          <Card className="p-5 mb-6 space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-semibold text-sm">Pipeline</h3>
+              {autopilot && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
+                  autopilot — review pass → render → stitch → publish, no gates
+                </span>
+              )}
+            </div>
+            {lessonLanes.map((l) => (
+              <div key={l.id} className="flex items-center gap-3 text-sm">
+                <Link href={`/lessons/${l.id}`} className="w-56 truncate hover:text-[var(--color-accent)] transition-colors shrink-0">
+                  {l.title}
+                </Link>
+                <div className="flex-1 h-2 bg-[var(--color-bg)] rounded overflow-hidden">
+                  <div className="h-full bg-[var(--color-accent)] transition-all"
+                       style={{ width: l.total ? `${(l.rendered / l.total) * 100}%` : "0%" }} />
+                </div>
+                <span className="text-xs text-[var(--color-muted)] tabular-nums w-16 text-right shrink-0">
+                  {l.rendered}/{l.total}
+                </span>
+                {l.failed > 0 && (
+                  <span className="text-xs text-[var(--color-accent-2)] shrink-0">{l.failed} failed</span>
+                )}
+                {l.done === l.total && l.total > 0 && (
+                  <span className="text-xs text-[var(--color-accent)] shrink-0">✓</span>
+                )}
+              </div>
+            ))}
+          </Card>
+        )}
+
         <Tabs defaultValue="tree">
           <TabsList>
             <TabsTrigger value="tree">Course tree</TabsTrigger>

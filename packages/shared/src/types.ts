@@ -29,6 +29,9 @@ export interface Course {
   id: string;
   title: string;
   summary: string | null;
+  /** Conductor mode: passing beats skip the human gate and auto-render;
+   *  stitched lessons auto-publish to SCORM. */
+  autopilot: boolean;
   createdAt: string;
   updatedAt: string;
 }

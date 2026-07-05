@@ -176,12 +176,19 @@ export function startAIReviewWorker() {
       const hasP0 = review.issues.some((i) => i.severity === "P0");
       const hasP1 = review.issues.some((i) => i.severity === "P1");
 
+      // Conductor mode: on autopilot courses, passing beats skip the human
+      // gate and queue straight to render. Failing beats still revise-loop.
+      // (course is already loaded above for review context.)
+      const autopilot = course?.autopilot ?? false;
+
       // Decide routing
       let nextStage: "human_review" | "revising" | "approved";
       if (review.score >= PASS_THRESHOLD && !hasP0 && !hasP1) {
-        nextStage = "human_review"; // still gate at human even when clean — operator clicks Approve
+        nextStage = autopilot ? "approved" : "human_review";
       } else if (review.score >= REVISE_THRESHOLD && !hasP0) {
-        nextStage = "human_review"; // human sees the issues
+        // Minor issues: autopilot renders anyway (issues stay attached for
+        // later human audit); manual mode gates at the human.
+        nextStage = autopilot ? "approved" : "human_review";
       } else if (beat.revisionCount < MAX_REVISION_LOOPS) {
         nextStage = "revising"; // auto-loop back to author
       } else {
@@ -195,6 +202,11 @@ export function startAIReviewWorker() {
         reviewedAt: new Date(),
         updatedAt: new Date(),
       }).where(eq(tables.beats.id, beatId));
+
+      if (nextStage === "approved" && autopilot && !beat.mp4Key) {
+        await queues.render.add("autopilot-render", { beatId });
+        console.log(`[ai-review] autopilot: beat ${beatId} passed (${review.score}) → render queued`);
+      }
 
       if (nextStage === "revising") {
         const feedback = review.issues.slice(0, 5).map((i) => `[${i.severity}] ${i.description}${i.suggestion ? ` (suggest: ${i.suggestion})` : ""}`).join("\n");

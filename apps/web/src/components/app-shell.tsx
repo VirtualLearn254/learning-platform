@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { BookOpen, KanbanSquare, BarChart3, Settings, Sparkles, Home, Palette, FileText, Activity } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { CommandPalette } from "@/components/command-palette";
 
 interface NavItem {
   href: string;
@@ -28,6 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   return (
     <div className="flex h-screen overflow-hidden">
+      <CommandPalette />
       {/* ── Left nav: header pinned, link list scrolls, status pinned ── */}
       <aside className="w-60 bg-white border-r border-[var(--color-border)] flex flex-col">
         <div className="shrink-0 px-6 py-6 border-b border-[var(--color-border)]">
@@ -58,8 +60,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="shrink-0 p-4 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)]">
-          Status: <span className="text-[var(--color-accent)]">scaffold</span>
+        <div className="shrink-0 p-4 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)] flex items-center justify-between">
+          <span>v0.2</span>
+          <span className="inline-flex items-center gap-1">
+            <kbd className="border border-[var(--color-border)] rounded px-1 py-0.5 text-[10px]">Ctrl</kbd>
+            <kbd className="border border-[var(--color-border)] rounded px-1 py-0.5 text-[10px]">K</kbd>
+            search
+          </span>
         </div>
       </aside>
       {/* ── Main column: column-flex so PageHeader stays + PageBody scrolls ── */}

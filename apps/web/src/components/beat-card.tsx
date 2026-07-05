@@ -1,13 +1,32 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Clock, CheckCircle2, AlertCircle, Loader2, ThumbsUp, RotateCcw } from "lucide-react";
 import type { Beat } from "@lp/shared";
+import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { StageBadge } from "@/components/stage-badge";
 import { cn } from "@/lib/cn";
 
-export function BeatCard({ beat, compact = false }: { beat: Beat; compact?: boolean }) {
+export function BeatCard({ beat, compact = false, onAction }: { beat: Beat; compact?: boolean; onAction?: () => void }) {
+  const [busy, setBusy] = useState(false);
+
+  /** Quick feedback without opening the beat — Approve / Revise from the card. */
+  async function quick(e: React.MouseEvent, action: "approve" | "revise") {
+    e.preventDefault();
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      await api.giveBeatFeedback(beat.id, {
+        action,
+        feedback: action === "approve" ? "Approved from kanban quick action." : "Revise — flagged from kanban; see AI review issues.",
+      });
+      onAction?.();
+    } finally {
+      setBusy(false);
+    }
+  }
   const statusIcon = {
     pending:   <Clock className="w-3.5 h-3.5 text-[var(--color-muted)]" />,
     running:   <Loader2 className="w-3.5 h-3.5 text-[var(--color-accent)] animate-spin" />,
@@ -42,6 +61,24 @@ export function BeatCard({ beat, compact = false }: { beat: Beat; compact?: bool
         </div>
         {beat.revisionCount > 0 && (
           <p className="text-[10px] text-[var(--color-muted)] mt-2">{beat.revisionCount} revision{beat.revisionCount > 1 ? "s" : ""}</p>
+        )}
+        {beat.stage === "human_review" && onAction && (
+          <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--color-border)]">
+            <button
+              disabled={busy}
+              onClick={(e) => quick(e, "approve")}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              <ThumbsUp className="w-3 h-3" /> Approve
+            </button>
+            <button
+              disabled={busy}
+              onClick={(e) => quick(e, "revise")}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg)] disabled:opacity-50 transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" /> Revise
+            </button>
+          </div>
         )}
       </Card>
     </Link>

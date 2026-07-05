@@ -28,6 +28,11 @@ export const api = {
   getCourseTree: (id: string) => fetchJson<{ tree: CourseTreeResponse }>(`/courses/${id}/tree`),
   createCourse: (input: { title: string; summary?: string }) =>
     fetchJson<{ course: Course }>("/courses", { method: "POST", body: JSON.stringify(input) }),
+  /** Conductor: run the whole course through the pipeline on autopilot. */
+  runCourse: (id: string) =>
+    fetchJson<{ ok: boolean; autopilot: boolean; authorQueued: number; renderQueued: number; totalBeats: number }>(`/courses/${id}/run`, { method: "POST" }),
+  stopCourse: (id: string) =>
+    fetchJson<{ ok: boolean; autopilot: boolean }>(`/courses/${id}/stop`, { method: "POST" }),
 
   // Lessons
   getLesson: (id: string) => fetchJson<{

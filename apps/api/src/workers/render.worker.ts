@@ -31,7 +31,7 @@ import { htmlToPng, assembleMp4 } from "../lib/render.js";
 import { buildBeatHtmlHF, type BeatStyle } from "../lib/hf-templates.js";
 import { designAnimatedBeat, type DesignBeatInput } from "../lib/hf-designer.js";
 import { renderAnimatedMp4 } from "../lib/hf-render.js";
-import { verifyComposition } from "../lib/hf-verifier.js";
+import { verifyComposition, captureTimelineFrames, sampleTimes } from "../lib/hf-verifier.js";
 import { getAIClient } from "../lib/ai_client.js";
 import { ensureFresh, getProfileOverride } from "../lib/profiles_store.js";
 
@@ -141,12 +141,14 @@ export function startRenderWorker() {
           let finalHtml = design.html;
 
           // Phase 3: vision verifier — 3 sampled frames checked for overlap /
-          // clipping / contrast before the expensive full render. One repair
-          // round on P0; a still-failing repair falls through with a warning
-          // (the human reviewer is the next gate).
+          // clipping / contrast before the expensive full render. Frames are
+          // persisted to S3 so the beat page can show the human reviewer the
+          // same evidence the AI judged. One repair round on P0; a
+          // still-failing repair falls through flagged for human review.
           try {
             await note("verifying composition frames (vision)");
-            const verdict = await verifyComposition(ai, finalHtml, durationSec);
+            let frames = await captureTimelineFrames(finalHtml, sampleTimes(durationSec));
+            const verdict = await verifyComposition(ai, finalHtml, durationSec, frames);
             if (!verdict.pass) {
               const p0s = verdict.issues.filter((i) => i.severity === "P0");
               await note(`verifier found ${p0s.length} P0 issue(s) — repair round`);
@@ -154,15 +156,17 @@ export function startRenderWorker() {
                 ...designInput,
                 repairNotes: verdict.issues.map((i) => `- [${i.severity}] frame ${i.frame}: ${i.description} → ${i.fix}`).join("\n"),
               }, note);
-              const recheck = await verifyComposition(ai, repaired.html, durationSec);
+              const repairedFrames = await captureTimelineFrames(repaired.html, sampleTimes(durationSec));
+              const recheck = await verifyComposition(ai, repaired.html, durationSec, repairedFrames);
               if (recheck.pass) {
                 finalHtml = repaired.html;
+                frames = repairedFrames;
                 await note("repair verified clean");
               } else {
                 // Keep the better of the two: repaired if it reduced P0 count.
                 const before = p0s.length;
                 const after = recheck.issues.filter((i) => i.severity === "P0").length;
-                if (after < before) finalHtml = repaired.html;
+                if (after < before) { finalHtml = repaired.html; frames = repairedFrames; }
                 await note(`verifier still sees ${Math.min(before, after)} P0(s) — proceeding, flagged for human review`);
               }
             } else if (verdict.issues.length > 0) {
@@ -170,6 +174,10 @@ export function startRenderWorker() {
             } else {
               await note("verifier: clean");
             }
+            // Persist whichever frames match the final composition.
+            await Promise.all(frames.map((f, i) =>
+              s3.putObject(`beats/${beatId}/verify-${i + 1}.png`, f, { contentType: "image/png" }),
+            ));
           } catch (verr) {
             // Verifier is best-effort — never block the render on its failure.
             console.warn(`[render:${jobId.slice(0, 8)}] verifier errored (skipping):`, verr instanceof Error ? verr.message : verr);

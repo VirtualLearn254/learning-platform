@@ -117,6 +117,27 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
               )}
             </Card>
 
+            {beat.htmlKey && (
+              <Card className="p-6">
+                <h3 className="font-semibold mb-1">Design frames</h3>
+                <p className="text-xs text-[var(--color-muted)] mb-3">
+                  The three frames the vision verifier judged — entrance · hero · settle.
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  {[1, 2, 3].map((i) => (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      key={i}
+                      src={`/api/files/${encodeURIComponent(`beats/${beat.id}/verify-${i}.png`)}`}
+                      alt={["entrance", "hero", "settle"][i - 1]}
+                      className="rounded-lg border border-[var(--color-border)] w-full aspect-video object-cover bg-[var(--color-bg)]"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  ))}
+                </div>
+              </Card>
+            )}
+
             {(beat.reviewScore !== null || (beat.reviewIssues && beat.reviewIssues.length > 0)) && (
               <Card className="p-6">
                 <h3 className="font-semibold mb-3">AI review</h3>

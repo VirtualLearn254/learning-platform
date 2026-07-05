@@ -20,6 +20,7 @@ import { QueueNames, queues } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
 import { s3 } from "../lib/s3.js";
 import { concatMp4s } from "../lib/render.js";
+import { courseForLesson } from "../lib/hierarchy.js";
 
 interface JobData { lessonId: string }
 
@@ -98,6 +99,13 @@ export function startStitchWorker() {
 
       // Hand off to audit (stub today; will become the holistic-review gate).
       await queues.audit.add("audit-lesson", { lessonId });
+
+      // Conductor mode: stitched lessons auto-publish to SCORM.
+      const course = await courseForLesson(lessonId).catch(() => null);
+      if (course?.autopilot) {
+        await queues.scormBuild.add("autopilot-publish", { lessonId });
+        console.log(`[stitch] autopilot: lesson ${lessonId} → scorm publish queued`);
+      }
 
       return { lessonId, masterKey, durationSec };
     } catch (err) {

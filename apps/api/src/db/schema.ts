@@ -32,6 +32,10 @@ export const courses = pgTable("courses", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
   summary: text("summary"),
+  /** Conductor mode: when true, beats that pass AI review skip the human
+   *  gate and queue straight to render; stitched lessons auto-publish to
+   *  SCORM. Set by POST /courses/:id/run, cleared by /courses/:id/stop. */
+  autopilot: boolean("autopilot").default(false).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
