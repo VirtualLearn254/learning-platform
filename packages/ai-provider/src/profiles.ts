@@ -6,7 +6,7 @@
  * Model names MUST match what the chosen provider actually serves.
  */
 
-export type ProviderId = "anthropic" | "local" | "openai" | "deepseek";
+export type ProviderId = "anthropic" | "local" | "openai" | "deepseek" | "fireworks";
 
 export interface AIProfile {
   id: string;
@@ -33,6 +33,7 @@ export const profiles = {
       anthropic: "claude-sonnet-4-6",
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
+      fireworks: "accounts/fireworks/models/glm-5p2",
       openai:   "gpt-4o",
     },
     temperature: 0.7,
@@ -49,6 +50,7 @@ export const profiles = {
       anthropic: "claude-sonnet-4-6",
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
+      fireworks: "accounts/fireworks/models/glm-5p2",
       openai:   "gpt-4o",
     },
     temperature: 0.6,
@@ -63,6 +65,7 @@ export const profiles = {
       anthropic: "claude-haiku-4-5-20251001",
       local:    "Qwen/Qwen2.5-14B-Instruct-AWQ",
       deepseek: "deepseek-chat",
+      fireworks: "accounts/fireworks/models/glm-5p2",
       openai:   "gpt-4o-mini",
     },
     temperature: 0.3,
@@ -77,6 +80,7 @@ export const profiles = {
       anthropic: "claude-opus-4-8",
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
+      fireworks: "accounts/fireworks/models/glm-5p2",
       openai:   "gpt-4o",
     },
     temperature: 0.4,
@@ -90,7 +94,8 @@ export const profiles = {
     modelByProvider: {
       anthropic: "claude-sonnet-4-6",
       local:    "Qwen/Qwen2-VL-7B-Instruct",
-      deepseek: "deepseek-chat",            // no vision; only here for the union
+      deepseek: "deepseek-chat",
+      fireworks: "accounts/fireworks/models/glm-5p2",            // no vision; only here for the union
       openai:   "gpt-4o",
     },
     temperature: 0.2,
@@ -107,6 +112,7 @@ export const profiles = {
       anthropic: "claude-sonnet-4-6",
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
+      fireworks: "accounts/fireworks/models/glm-5p2",
       openai:   "gpt-4o",
     },
     temperature: 0.4,
@@ -121,6 +127,7 @@ export const profiles = {
       anthropic: "claude-haiku-4-5-20251001",
       local:    "Qwen/Qwen2.5-14B-Instruct-AWQ",
       deepseek: "deepseek-chat",
+      fireworks: "accounts/fireworks/models/glm-5p2",
       openai:   "gpt-4o-mini",
     },
     temperature: 0.2,

@@ -33,6 +33,7 @@ export interface ProviderConfig {
   vllm?: { baseUrl: string; apiKey?: string };
   openai?: { apiKey: string };
   deepseek?: { apiKey: string };
+  fireworks?: { apiKey: string };
 }
 
 /**
@@ -70,6 +71,7 @@ export function createAIClient(
   const vllm = config.vllm ? new VllmProvider(config.vllm) : null;
   const openai = config.openai ? new OpenAIProvider({ apiKey: config.openai.apiKey, baseUrl: "https://api.openai.com/v1" }) : null;
   const deepseek = config.deepseek ? new OpenAIProvider({ apiKey: config.deepseek.apiKey, baseUrl: "https://api.deepseek.com/v1" }) : null;
+  const fireworks = config.fireworks ? new OpenAIProvider({ apiKey: config.fireworks.apiKey, baseUrl: "https://api.fireworks.ai/inference/v1" }) : null;
 
   /** Returns the effective preference chain with any override-preferred provider pinned to the front. */
   function effectiveChain(profile: AIProfile, override?: ProfileOverride): readonly import("./profiles.js").ProviderId[] {
@@ -86,10 +88,11 @@ export function createAIClient(
       if (preferred === "local" && vllm)         return { provider: vllm,      model: overrideModel ?? profile.modelByProvider.local };
       if (preferred === "openai" && openai)      return { provider: openai,    model: overrideModel ?? profile.modelByProvider.openai };
       if (preferred === "deepseek" && deepseek)  return { provider: deepseek,  model: overrideModel ?? profile.modelByProvider.deepseek };
+      if (preferred === "fireworks" && fireworks) return { provider: fireworks, model: overrideModel ?? profile.modelByProvider.fireworks };
     }
     throw new Error(
       `No configured provider for profile "${profile.id}". Preferred order: ${chain.join(", ")}. ` +
-      `Set ANTHROPIC_API_KEY, VLLM_BASE_URL, OPENAI_API_KEY, or DEEPSEEK_API_KEY in your environment, ` +
+      `Set ANTHROPIC_API_KEY, VLLM_BASE_URL, OPENAI_API_KEY, DEEPSEEK_API_KEY, or FIREWORKS_API_KEY in your environment, ` +
       `or save one via the Settings UI.`,
     );
   }
@@ -110,7 +113,7 @@ export function createAIClient(
     async vision(profileId, req) {
       const profile = profiles[profileId];
       if (!profile) throw new Error(`Unknown profile: ${profileId}`);
-      if (!profile.supportsVision) {
+      if (!(profile as AIProfile).supportsVision) {
         throw new Error(`Profile "${profileId}" does not support vision. Use a vision-capable profile (e.g. "verifier").`);
       }
       const override = getOverrides?.(profileId);

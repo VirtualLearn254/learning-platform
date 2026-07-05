@@ -301,14 +301,24 @@ export function lintHfComposition(html: string, expectedDurationSec: number, sty
   return { ok: issues.length === 0, issues };
 }
 
-/** Strip accidental markdown fences some models wrap around the HTML. */
-function extractHtml(raw: string): string {
-  const fenced = raw.match(/```(?:html)?\s*([\s\S]*?)```/);
+/**
+ * Extract the composition from a model response. Handles:
+ *  - markdown fences
+ *  - reasoning models that think out loud around the HTML
+ *  - draft-then-revise outputs (GLM 5.2 writes a draft, critiques it, then a
+ *    refined version) — we take the LAST complete <!doctype…</html> document
+ * Returns null when no complete document exists (true truncation).
+ */
+export function extractHtml(raw: string): string | null {
+  const fenced = raw.match(/```(?:html)?\s*([\s\S]*?)```\s*$/);
   const body = fenced ? fenced[1]! : raw;
-  const start = body.indexOf("<!doctype");
-  const startUpper = body.indexOf("<!DOCTYPE");
-  const idx = start >= 0 ? start : startUpper;
-  return (idx >= 0 ? body.slice(idx) : body).trim();
+  const starts = [...body.matchAll(/<!doctype html>/gi)].map((m) => m.index!);
+  // Prefer the last document that is COMPLETE (has a closing </html>).
+  for (let i = starts.length - 1; i >= 0; i--) {
+    const end = body.indexOf("</html>", starts[i]!);
+    if (end >= 0) return body.slice(starts[i]!, end + 7).trim();
+  }
+  return null;
 }
 
 /**
@@ -332,12 +342,17 @@ export async function designAnimatedBeat(
         { role: "user", content: user },
       ],
     });
-    if (res.truncated) {
-      repairNotes = "Output hit the token limit — produce a more compact composition (fewer elements, terser CSS).";
-      await onNote?.("designer output truncated, retrying compact");
+    const html = extractHtml(res.text);
+    // Reasoning models (GLM 5.2) may hit the token limit AFTER emitting a
+    // complete document — only treat truncation as fatal when no complete
+    // document survived extraction.
+    if (!html) {
+      repairNotes = res.truncated
+        ? "Output hit the token limit before a complete document was emitted — skip all analysis/commentary, output ONLY the HTML, terser CSS."
+        : "No complete <!doctype html>…</html> document found in the reply — output ONLY the HTML file.";
+      await onNote?.(res.truncated ? "designer output truncated, retrying compact" : "no complete document in reply, retrying");
       continue;
     }
-    const html = extractHtml(res.text);
     const lint = lintHfComposition(html, input.audioDurationSec, input.styleHint);
     if (lint.ok) return { html, attempts: attempt };
     repairNotes = lint.issues.map((i) => `- ${i}`).join("\n");

@@ -247,7 +247,7 @@ function AIRolesCard() {
                         value={provider ?? ""}
                         onChange={(e) => patch(p.id, { preferredProvider: e.target.value, modelId: undefined })}
                       >
-                        {(["anthropic", "openai", "deepseek", "local"] as Provider[]).map((id) => (
+                        {(["anthropic", "openai", "deepseek", "fireworks", "local"] as Provider[]).map((id) => (
                           <option key={id} value={id} disabled={!configuredProviders.has(id)}>
                             {id}{configuredProviders.has(id) ? "" : " (not configured)"}
                           </option>

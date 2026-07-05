@@ -39,6 +39,9 @@ export const MODEL_CATALOG: Record<ProviderId, ModelInfo[]> = {
     { id: "o1",                           displayName: "o1 (reasoning)",     inputPer1M: 15.0,  outputPer1M: 60.0,  supportsVision: false, speed: "slow",    tier: "frontier" },
     { id: "o1-mini",                      displayName: "o1 mini (reasoning)",inputPer1M:  3.0,  outputPer1M: 12.0,  supportsVision: false, speed: "balanced",tier: "mid" },
   ],
+  fireworks: [
+    { id: "accounts/fireworks/models/glm-5p2", displayName: "GLM 5.2 (Z.ai)", inputPer1M: 1.40, outputPer1M: 4.40, speed: "balanced", tier: "frontier" },
+  ],
   deepseek: [
     { id: "deepseek-chat",                displayName: "DeepSeek Chat",      inputPer1M: 0.27, outputPer1M: 1.10, speed: "balanced", tier: "cheap" },
     { id: "deepseek-reasoner",            displayName: "DeepSeek Reasoner",  inputPer1M: 0.55, outputPer1M: 2.19, speed: "slow",     tier: "mid" },

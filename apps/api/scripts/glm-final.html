@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<style>
+  :root {
+    --bg: #FAFAF7;
+    --ink: #111111;
+    --muted: #6B6B66;
+    --accent: #DC2626;
+    --surface: #FFFFFF;
+  }
+  html, body { margin: 0; padding: 0; }
+  [data-composition-id="root"] {
+    width: 1920px; height: 1080px; overflow: hidden; position: relative;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* Clip base */
+  .clip { position: absolute; inset: 0; }
+  .phase { width: 100%; height: 100%; padding: 96px; box-sizing: border-box; position: relative; display: flex; flex-direction: column; }
+  
+  /* Decorative grid background */
+  .deco-grid {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(17,17,17,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(17,17,17,0.035) 1px, transparent 1px);
+    background-size: 96px 96px;
+  }
+  .deco-numeral {
+    position: absolute; font-size: 520px; font-weight: 800;
+    color: rgba(17,17,17,0.04); line-height: 1; pointer-events: none;
+    z-index: 0; letter-spacing: -0.05em;
+  }
+  
+  .eyebrow {
+    font-size: 22px; font-weight: 600; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .headline { font-size: 64px; font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; }
+  .body-text { font-size: 36px; color: var(--muted); line-height: 1.3; }
+  
+  /* === PHASE 1 === */
+  .p1-content { display: flex; gap: 80px; flex: 1; align-items: center; z-index: 1; position: relative; }
+  .p1-left { flex: 0 0 640px; display: flex; flex-direction: column; gap: 28px; }
+  .p1-number { font-size: 260px; font-weight: 800; line-height: 0.85; letter-spacing: -0.05em; }
+  .p1-number .dec { color: var(--accent); }
+  .p1-sub { font-size: 36px; color: var(--muted); line-height: 1.25; font-weight: 400; }
+  .p1-right { flex: 1; display: flex; flex-direction: column; gap: 56px; align-items: flex-start; }
+  .person-grid { display: flex; flex-wrap: wrap; gap: 12px; width: 588px; }
+  .person-glyph { display: block; width: 60px; height: 60px; color: var(--ink); flex-shrink: 0; }
+  .partial-wrap { width: 12px; overflow: hidden; display: block; flex-shrink: 0; }
+  .partial-wrap svg { width: 60px; height: 60px; display: block; }
+  
+  .p1-choices { display: flex; gap: 20px; }
+  .choice-card {
+    background: var(--surface); border: 1px solid rgba(17,17,17,0.15);
+    padding: 22px 40px; border-radius: 4px; display: flex; flex-direction: column; gap: 6px;
+    min-width: 200px;
+  }
+  .choice-label { font-size: 18px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .choice-value { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .choice-card.up .choice-value { color: var(--accent); }
+  
+  /* === PHASE 2 === */
+  .p2-content { display: flex; flex: 1; align-items: center; justify-content: center; gap: 0; z-index: 1; position: relative; }
+  .p2-card {
+    flex: 0 0 620px; background: var(--surface);
+    border: 1px solid rgba(17,17,17,0.15); padding: 56px 52px;
+    display: flex; flex-direction: column; gap: 28px; height: 580px;
+    border-radius: 4px;
+  }
+  .p2-card-icon { width: 72px; height: 72px; }
+  .p2-card-label { font-size: 20px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
+  .p2-card-label.muted { color: var(--muted); }
+  .p2-card-label.accent { color: var(--accent); }
+  .p2-card-title { font-size: 48px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+  .p2-card-body { font-size: 30px; color: var(--muted); line-height: 1.35; }
+  .p2-card-rule { width: 48px; height: 3px; background: var(--ink); }
+  .p2-card-rule.accent { background: var(--accent); }
+  .p2-vs {
+    font-size: 56px; font-weight: 800; color: var(--accent);
+    padding: 0 48px; display: flex; align-items: center;
+    letter-spacing: -0.02em;
+  }
+  
+  /* === PHASE 3 === */
+  .p3-content { display: flex; flex-direction: column; flex: 1; align-items: center; justify-content: center; gap: 64px; z-index: 1; position: relative; }
+  .p3-top { display: flex; flex-direction: column; align-items: center; gap: 32px; }
+  .p3-digit-row { display: flex; gap: 14px; align-items: center; }
+  .digit-box {
+    width: 130px; height: 170px; border: 2px solid rgba(17,17,17,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 110px; font-weight: 700; background: var(--surface);
+    border-radius: 8px; color: var(--ink);
+  }
+  .digit-box.highlight {
+    border-color: var(--accent); border-width: 3px; color: var(--accent);
+    box-shadow: 0 0 0 6px rgba(220,38,38,0.08);
+  }
+  .digit-dot { font-size: 100px; font-weight: 700; color: var(--muted); padding: 0 4px; }
+  .p3-pointer { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .p3-pointer-label { font-size: 24px; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
+  .p3-pointer-arrow { width: 2px; height: 40px; background: var(--accent); }
+  .p3-numberline-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  
+  /* === PHASE 4 === */
+  .p4-content { display: flex; flex-direction: column; flex: 1; align-items: center; justify-content: center; gap: 52px; z-index: 1; position: relative; }
+  .p4-rows { display: flex; flex-direction: column; gap: 40px; }
+  .p4-row { display: flex; align-items: center; gap: 36px; }
+  .p4-row-label { font-size: 32px; font-weight: 600; color: var(--muted); width: 80px; text-align: right; }
+  .p4-digits { display: flex; gap: 10px; align-items: center; }
+  .p4-digit-box {
+    width: 90px; height: 120px; border: 2px solid rgba(17,17,17,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 72px; font-weight: 700; background: var(--surface);
+    border-radius: 6px;
+  }
+  .p4-digit-box.highlight { border-color: var(--accent); border-width: 3px; color: var(--accent); }
+  .p4-digit-dot { font-size: 68px; font-weight: 700; color: var(--muted); }
+  .p4-arrow { font-size: 36px; color: var(--accent); font-weight: 700; }
+  .p4-result { font-size: 80px; font-weight: 800; width: 120px; letter-spacing: -0.03em; }
+  .p4-result.down { color: var(--ink); }
+  .p4-result.up { color: var(--accent); }
+  .p4-note { font-size: 28px; color: var(--muted); text-align: center; letter-spacing: 0.05em; }
+  .p4-note strong { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body>
+  <div data-composition-id="root" data-width="1920" data-height="1080" data-duration="37.0">
+    <audio id="narration" class="clip" src="assets/narration.mp3" data-start="0" data-track-index="0"></audio>
+    
+    <!-- Phase 1: 0-14s -->
+    <div class="clip" id="phase1" data-start="0" data-duration="14" data-track-index="1">
+      <div class="deco-grid"></div>
+      <div class="deco-numeral" style="bottom: -80px; right: -40px;">25.2</div>
+      <div class="phase">
+        <div class="p1-content">
+          <div class="p1-left">
+            <div class="eyebrow" id="p1-eyebrow">The Question</div>
+            <div class="p1-number" id="p1-number">25<span class="dec">.2</span></div>
+            <div class="p1-sub" id="p1-sub">people at a party —<br/>round up or down?</div>
+          </div>
+          <div class="p1-right">
+            <div class="person-grid" id="person-grid"></div>
+            <div class="p1-choices" id="p1-choices">
+              <div class="choice-card" id="choice-down">
+                <div class="choice-label">Round down</div>
+                <div class="choice-value">25</div>
+              </div>
+              <div class="choice-card up" id="choice-up">
+                <div class="choice-label">Round up</div>
+                <div class="choice-value">26</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Phase 2: 14-23s -->
+    <div class="clip" id="phase2" data-start="14" data-duration="9" data-track-index="1">
+      <div class="deco-grid"></div>
+      <div class="deco-numeral" style="top: -60px; left: -20px;">VS</div>
+      <div class="phase">
+        <div class="p2-content">
+          <div class="p2-card" id="p2-card-left">
+            <svg class="p2-card-icon" viewBox="0 0 72 72" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M36 60 C36 60 10 42 10 26 C10 18 16 12 24 12 C30 12 34 16 36 20 C38 16 42 12 48 12 C56 12 62 18 62 26 C62 42 36 60 36 60Z"/>
+            </svg>
+            <div class="p2-card-label muted">Real Life</div>
+            <div class="p2-card-rule"></div>
+            <div class="p2-card-title">Feed the<br/>extra person</div>
+            <div class="p2-card-body">You'd never leave someone hungry. Kindness wins.</div>
+          </div>
+          <div class="p2-vs" id="p2-vs">VS</div>
+          <div class="p2-card" id="p2-card-right">
+            <svg class="p2-card-icon" viewBox="0 0 72 72" fill="none" stroke="#DC2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="10" y="10" width="52" height="52" rx="4"/>
+              <line x1="10" y1="28" x2="62" y2="28"/>
+              <line x1="10" y1="46" x2="62" y2="46"/>
+              <line x1="28" y1="10" x2="28" y2="62"/>
+              <line x1="46" y1="10" x2="46" y2="62"/>
+            </svg>
+            <div class="p2-card-label accent">Mathematics</div>
+            <div class="p2-card-rule accent"></div>
+            <div class="p2-card-title">A fixed<br/>rule decides</div>
+            <div class="p2-card-body">No kindness. No safety check. Just one digit.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Phase 3: 23-31s -->
+    <div class="clip" id="phase3" data-start="23" data-duration="8" data-track-index="1">
+      <div class="deco-grid"></div>
+      <div class="deco-numeral" style="bottom: -100px; left: -30px;">.2</div>
+      <div class="phase">
+        <div class="p3-content">
+          <div class="eyebrow" id="p3-eyebrow" style="align-self: flex-start;">The Mechanism</div>
+          <div class="p3-top">
+            <div class="p3-digit-row" id="p3-digits">
+              <div class="digit-box">2</div>
+              <div class="digit-box">5</div>
+              <div class="digit-dot">.</div>
+              <div class="digit-box highlight" id="p3-key-digit">2</div>
+            </div>
+            <div class="p3-pointer" id="p3-pointer">
+              <div class="p3-pointer-label">This digit decides</div>
+              <div class="p3-pointer-arrow"></div>
+            </div>
+          </div>
+          <div class="p3-numberline-wrap" id="p3-numberline">
+            <svg width="700" height="140" viewBox="0 0 700 140">
+              <line x1="80" y1="70" x2="620" y2="70" stroke="#111" stroke-width="2.5" id="nl-line"/>
+              <line x1="80" y1="52" x2="80" y2="88" stroke="#111" stroke-width="2.5"/>
+              <text x="80" y="118" text-anchor="middle" font-size="30" font-weight="700" fill="#111">25</text>
+              <line x1="350" y1="58" x2="350" y2="82" stroke="#6B6B66" stroke-width="1.5" stroke-dasharray="4 4"/>
+              <text x="350" y="118" text-anchor="middle" font-size="24" fill="#6B6B66">25.5</text>
+              <line x1="620" y1="52" x2="620" y2="88" stroke="#111" stroke-width="2.5"/>
+              <text x="620" y="118" text-anchor="middle" font-size="30" font-weight="700" fill="#111">26</text>
+              <g id="nl-marker" transform="translate(192, 70)">
+                <line x1="0" y1="-30" x2="0" y2="-8" stroke="#DC2626" stroke-width="2.5"/>
+                <circle cx="0" cy="0" r="12" fill="#DC2626"/>
+                <text x="0" y="-40" text-anchor="middle" font-size="26" font-weight="700" fill="#DC2626">25.2</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Phase 4: 31-37s -->
+    <div class="clip" id="phase4" data-start="31" data-duration="6" data-track-index="1">
+      <div class="deco-grid"></div>
+      <div class="deco-numeral" style="top: -80px; right: -20px;">?</div>
+      <div class="phase">
+        <div class="p4-content">
+          <div class="eyebrow" id="p4-eyebrow" style="align-self: flex-start;">The Rule</div>
+          <div class="p4-rows" id="p4-rows">
+            <div class="p4-row" id="p4-row1">
+              <div class="p4-row-label">25.2</div>
+              <div class="p4-digits">
+                <div class="p4-digit-box">2</div>
+                <div class="p4-digit-box">5</div>
+                <div class="p4-digit-dot">.</div>
+                <div class="p4-digit-box highlight">2</div>
+              </div>
+              <div class="p4-arrow">→</div>
+              <div class="p4-result down">25</div>
+            </div>
+            <div class="p4-row" id="p4-row2">
+              <div class="p4-row-label">25.7</div>
+              <div class="p4-digits">
+                <div class="p4-digit-box">2</div>
+                <div class="p4-digit-box">5</div>
+                <div class="p4-digit-dot">.</div>
+                <div class="p4-digit-box highlight">7</div>
+              </div>
+              <div class="p4-arrow">→</div>
+              <div class="p4-result up">26</div>
+            </div>
+          </div>
+          <div class="p4-note" id="p4-note">Tenths digit <strong>≥ 5</strong> rounds up · <strong>&lt; 5</strong> rounds down</div>
+        </div>
+      </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script>
+      // Generate person glyphs
+      const grid = document.getElementById('person-grid');
+      const glyphSVG = `<svg class="person-glyph" viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="30" cy="16" r="9"/><path d="M10 54 C10 40 19 32 30 32 C41 32 50 40 50 54"/></svg>`;
+      for (let i = 0; i < 25; i++) {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'display:block;';
+        wrapper.innerHTML = glyphSVG;
+        grid.appendChild(wrapper.firstChild);
+      }
+      // 26th partial (20% of 60px = 12px)
+      const partialWrap = document.createElement('div');
+      partialWrap.className = 'partial-wrap';
+      partialWrap.innerHTML = glyphSVG;
+      grid.appendChild(partialWrap);
+      
+      // Set initial states
+      gsap.set('#p1-eyebrow, #p1-number, #p1-sub', { opacity: 0, y: 30 });
+      gsap.set('.person-glyph', { opacity: 0, scale: 0.5 });
+      gsap.set('.partial-wrap', { opacity: 0, scale: 0.5 });
+      gsap.set('#p1-choices .choice-card', { opacity: 0, y: 40 });
+      
+      gsap.set('#p2-card-left', { opacity: 0, x: -60 });
+      gsap.set('#p2-card-right', { opacity: 0, x: 60 });
+      gsap.set('#p2-vs', { opacity: 0, scale: 0.5 });
+      
+      gsap.set('#p3-eyebrow', { opacity: 0, y: 20 });
+      gsap.set('#p3-digits .digit-box, #p3-digits .digit-dot', { opacity: 0, y: 40, scale: 0.8 });
+      gsap.set('#p3-pointer', { opacity: 0, y: -20 });
+      gsap.set('#nl-line', { strokeDasharray: 540, strokeDashoffset: 540 });
+      gsap.set('#nl-marker', { opacity: 0, x: -20 });
+      gsap.set('#p3-numberline text, #p3-numberline line:not(#nl-line)', { opacity: 0 });
+      
+      gsap.set('#p4-eyebrow', { opacity: 0, y: 20 });
+      gsap.set('#p4-row1 .p4-digit-box, #p4-row1 .p4-digit-dot, #p4-row1 .p4-row-label, #p4-row1 .p4-arrow, #p4-row1 .p4-result', { opacity: 0, y: 30 });
+      gsap.set('#p4-row2 .p4-digit-box, #p4-row2 .p4-digit-dot, #p4-row2 .p4-row-label, #p4-row2 .p4-arrow, #p4-row2 .p4-result', { opacity: 0, y: 30 });
+      gsap.set('#p4-note', { opacity: 0, y: 20 });
+      
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      
+      // === PHASE 1 (0-14s) ===
+      // Entrance
+      tl.to('#p1-eyebrow', { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }, 0.3);
+      tl.to('#p1-number', { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out' }, 0.5);
+      tl.to('#p1-sub', { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }, 0.9);
+      tl.to('.person-glyph', { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out', stagger: 0.03 }, 1.2);
+      tl.to('.partial-wrap', { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out' }, 1.2 + 25 * 0.03);
+      tl.to('#p1-choices .choice-card', { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out', stagger: 0.15 }, 2.3);
+      
+      // Mid-scene life
+      tl.to('#p1-number', { scale: 1.015, duration: 4, ease: 'sine.inOut', yoyo: true, repeat: -1 }, 3);
+      tl.to('.person-glyph', { y: -4, duration: 3, ease: 'sine.inOut', yoyo: true, repeat: -1, stagger: { each: 0.08, from: 'random' } }, 3.5);
+      
+      // Exit (before phase 2 at 14s)
+      tl.to('#p1-eyebrow, #p1-number, #p1-sub', { opacity: 0, y: -20, duration: 0.5, ease: 'power3.in' }, 12.5);
+      tl.to('.person-glyph, .partial-wrap', { opacity: 0, scale: 0.5, duration: 0.5, ease: 'power3.in', stagger: 0.01 }, 12.7);
+      tl.to('#p1-choices .choice-card', { opacity: 0, y: -30, duration: 0.5, ease: 'power3.in' }, 12.5);
+      
+      // === PHASE 2 (14-23s) ===
+      // Entrance
+      tl.to('#p2-card-left', { opacity: 1, x: 0, duration: 0.7, ease: 'power3.out' }, 14.3);
+      tl.to('#p2-card-right', { opacity: 1, x: 0, duration: 0.7, ease: 'power3.out' }, 14.5);
+      tl.to('#p2-vs', { opacity: 1, scale: 1, duration: 0.5, ease: 'power3.out' }, 15.0);
+      
+      // Mid-scene life
+      tl.to('#p2-card-left', { scale: 1.01, duration: 4, ease: 'sine.inOut', yoyo: true, repeat: -1 }, 16);
+      tl.to('#p2-card-right', { scale: 1.01, duration: 4, ease: 'sine.inOut', yoyo: true, repeat: -1 }, 16.5);
+      
+      // Exit (before phase 3 at 23s)
+      tl.to('#p2-card-left', { opacity: 0, x: -40, duration: 0.5, ease: 'power3.in' }, 22.3);
+      tl.to('#p2-card-right', { opacity: 0, x: 40, duration: 0.5, ease: 'power3.in' }, 22.3);
+      tl.to('#p2-vs', { opacity: 0, scale: 0.5, duration: 0.4, ease: 'power3.in' }, 22.3);
+      
+      // === PHASE 3 (23-31s) ===
+      // Entrance
+      tl.to('#p3-eyebrow', { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 23.3);
+      tl.to('#p3-digits .digit-box, #p3-digits .digit-dot', { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out', stagger: 0.12 }, 23.6);
+      tl.to('#p3-pointer', { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 24.3);
+      tl.to('#p3-numberline text, #p3-numberline line:not(#nl-line)', { opacity: 1, duration: 0.4, ease: 'power3.out', stagger: 0.08 }, 24.8);
+      tl.to('#nl-line', { strokeDashoffset: 0, duration: 0.8, ease: 'power2.out' }, 24.8);
+      tl.to('#nl-marker', { opacity: 1, x: 0, duration: 0.6, ease: 'power3.out' }, 25.8);
+      
+      // Mid-scene life
+      tl.to('#p3-key-digit', { scale: 1.04, duration: 2.5, ease: 'sine.inOut', yoyo: true, repeat: -1 }, 26.5);
+      tl.to('#nl-marker', { y: -4, duration: 3, ease: 'sine.inOut', yoyo: true, repeat: -1 }, 27);
+      
+      // Exit (before phase 4 at 31s)
+      tl.to('#p3-eyebrow', { opacity: 0, y: -15, duration: 0.4, ease: 'power3.in' }, 30.3);
+      tl.to('#p3-digits .digit-box, #p3-digits .digit-dot', { opacity: 0, y: -30, duration: 0.4, ease: 'power3.in', stagger: 0.05 }, 30.3);
+      tl.to('#p3-pointer', { opacity: 0, y: -15, duration: 0.4, ease: 'power3.in' }, 30.3);
+      tl.to('#p3-numberline', { opacity: 0, y: -20, duration: 0.4, ease: 'power3.in' }, 30.3);
+      
+      // === PHASE 4 (31-37s) ===
+      // Entrance
+      tl.to('#p4-eyebrow', { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 31.3);
+      tl.to('#p4-row1 .p4-digit-box, #p4-row1 .p4-digit-dot', { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out', stagger: 0.1 }, 31.6);
+      tl.to('#p4-row1 .p4-row-label', { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, 31.6);
+      tl.to('#p4-row1 .p4-arrow', { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, 32.2);
+      tl.to('#p4-row1 .p4-result', { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 32.4);
+      
+      tl.to('#p4-row2 .p4-digit-box, #p4-row2 .p4-digit-dot', { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out', stagger: 0.1 }, 32.8);
+      tl.to('#p4-row2 .p4-row-label', { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, 32.8);
+      tl.to('#p4-row2 .p4-arrow', { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, 33.4);
+      tl.to('#p4-row2 .p4-result', { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 33.6);
+      
+      tl.to('#p4-note', { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 34.2);
+      
+      // Mid-scene life (settled by 36s)
+      tl.to('#p4-row1 .p4-result', { scale: 1.02, duration: 3, ease: 'sine.inOut', yoyo: true, repeat: -1 }, 34.5);
+      tl.to('#p4-row2 .p4-result', { scale: 1.02, duration: 3, ease: 'sine.inOut', yoyo: true, repeat: -1 }, 35);
+      
+      window.__timelines["root"] = tl;
+    </script>
+  </div>
+</body>
+</html>

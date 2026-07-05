@@ -36,3 +36,9 @@ captures/
 
 # Generated at build time
 apps/web/src/lib/docs.generated.ts
+apps/api/scripts/.fireworks-key
+apps/api/scripts/playground-*.txt
+apps/api/scripts/playground-out.mp4
+apps/api/scripts/playground-frame-*.png
+apps/api/scripts/glm-output.html
+apps/api/scripts/beat-data.json

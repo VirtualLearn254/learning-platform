@@ -14,11 +14,12 @@ import { ensureFresh, getProfileOverride } from "./profiles_store.js";
 import { getSecret } from "./secrets.js";
 
 async function buildProviderConfig(): Promise<ProviderConfig> {
-  const [anthropicKey, anthropicBase, openaiKey, deepseekKey, vllmBase, vllmKey] = await Promise.all([
+  const [anthropicKey, anthropicBase, openaiKey, deepseekKey, fireworksKey, vllmBase, vllmKey] = await Promise.all([
     getSecret("anthropic_api_key"),
     getSecret("anthropic_base_url"),
     getSecret("openai_api_key"),
     getSecret("deepseek_api_key"),
+    getSecret("fireworks_api_key"),
     getSecret("vllm_base_url"),
     getSecret("vllm_api_key"),
   ]);
@@ -26,6 +27,7 @@ async function buildProviderConfig(): Promise<ProviderConfig> {
     ...(anthropicKey && { anthropic: { apiKey: anthropicKey, baseUrl: anthropicBase || undefined } }),
     ...(openaiKey    && { openai:    { apiKey: openaiKey } }),
     ...(deepseekKey  && { deepseek:  { apiKey: deepseekKey } }),
+    ...(fireworksKey && { fireworks: { apiKey: fireworksKey } }),
     ...(vllmBase     && { vllm:      { baseUrl: vllmBase, apiKey: vllmKey || "vllm-local" } }),
   };
 }
