@@ -100,6 +100,8 @@ P1 (should fix):
 - Element closer than ~40px to the frame edge
 - Severely lopsided layout (huge dead zone on one side while content crowds the other)
 - Broken visual (empty card, orphaned marker, misaligned leader line)
+- Text-only frame: no pictorial element (no SVG diagram, icon grid, number line, chart, oversized numeral) — the design contract requires one per phase
+- Under-filled frame: content occupies well under half the frame with large empty regions
 
 P2 (cosmetic): minor spacing/alignment nits.
 

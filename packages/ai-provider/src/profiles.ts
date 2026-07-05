@@ -52,7 +52,7 @@ export const profiles = {
       openai:   "gpt-4o",
     },
     temperature: 0.6,
-    maxTokens: 16000,
+    maxTokens: 20000,
   },
 
   /** Reviewing a beat for static issues. Quality-tolerant, cheap. */
