@@ -33,6 +33,7 @@ import { designAnimatedBeat, type DesignBeatInput } from "../lib/hf-designer.js"
 import { renderAnimatedMp4 } from "../lib/hf-render.js";
 import { verifyComposition } from "../lib/hf-verifier.js";
 import { getAIClient } from "../lib/ai_client.js";
+import { ensureFresh, getProfileOverride } from "../lib/profiles_store.js";
 
 interface JobData {
   beatId: string;
@@ -115,6 +116,15 @@ export function startRenderWorker() {
           await note("aligning word timestamps (whisper)");
           const wordTimestamps = await transcribeWords(mp3);
 
+          // Compact mode when the designer role runs on a tight output window
+          // (deepseek caps ~8-16K; rich compositions need 10-15K on the full
+          // contract). Auto-detected from the role's Settings override.
+          await ensureFresh();
+          const designerOverride = getProfileOverride("designer");
+          const compact = designerOverride?.preferredProvider === "deepseek"
+            || (designerOverride?.maxTokens != null && designerOverride.maxTokens < 12000);
+          if (compact) await note("compact design mode (tight output window)");
+
           const designInput: DesignBeatInput = {
             beatKey: beat.beatKey,
             beatType: beat.beatType,
@@ -125,6 +135,7 @@ export function startRenderWorker() {
             audioDurationSec: durationSec,
             styleHint: visual.style ?? styleHints?.style,
             wordTimestamps,
+            compact,
           };
           const design = await designAnimatedBeat(ai, designInput, note);
           let finalHtml = design.html;

@@ -34,6 +34,9 @@ export interface DesignBeatInput {
   /** Whisper word-level timestamps — when present, reveals anchor to the
    *  actual spoken word instead of proportional estimates. */
   wordTimestamps?: WordTimestamp[];
+  /** Compact mode for tighter output windows (deepseek etc.): 2-3 phases,
+   *  terser CSS, one pictorial device — targets < 7K output tokens. */
+  compact?: boolean;
   /** Feedback from a failed lint/render attempt — appended on retry. */
   repairNotes?: string;
 }
@@ -119,22 +122,96 @@ its opacity.
 
 Reply with ONLY the complete HTML file. No markdown fences, no commentary before or after. Start with <!doctype html>.`;
 
-const STYLE_PALETTES: Record<string, string> = {
-  "kinetic-pop":   "electric blue #2563EB accent on near-white #F7F8FA, ink #0B1220 text, bold geometric",
-  "swiss-grid":    "signal red #DC2626 accent on paper #FAFAF7, near-black #111 text, strict grid, generous whitespace",
-  "warm-grain":    "amber #D97706 accent on cream #FBF6EE, warm brown-black #221A10 text, soft shadows",
-  "liquid-glass":  "teal #0D9488 accent on deep navy #0B1B2B, white text, frosted-glass cards (blur + translucency)",
-  "neon-grid":     "cyan #22D3EE accent on charcoal #101418, off-white text, thin luminous rules",
-  "paper-mark":    "forest #166534 accent on warm paper #F6F1E7, ink text, underline/annotation marks",
-  "magnetic-flow": "violet #7C3AED accent on soft lavender-white #F6F4FB, ink text, flowing curved dividers",
+interface StylePalette {
+  bg: string;
+  ink: string;
+  muted: string;
+  accent: string;
+  surface: string;
+  desc: string;
+}
+
+const STYLE_PALETTES: Record<string, StylePalette> = {
+  "kinetic-pop":   { bg: "#F7F8FA", ink: "#0B1220", muted: "#5B6472", accent: "#2563EB", surface: "#FFFFFF", desc: "bold geometric, electric" },
+  "swiss-grid":    { bg: "#FAFAF7", ink: "#111111", muted: "#6B6B66", accent: "#DC2626", surface: "#FFFFFF", desc: "strict grid, generous whitespace" },
+  "warm-grain":    { bg: "#FBF6EE", ink: "#221A10", muted: "#7A6E5C", accent: "#D97706", surface: "#FFFDF8", desc: "soft shadows, warm" },
+  "liquid-glass":  { bg: "#0B1B2B", ink: "#F4F8FB", muted: "#93A7B8", accent: "#2DD4BF", surface: "rgba(255,255,255,0.07)", desc: "frosted-glass cards on deep navy (DARK style)" },
+  "neon-grid":     { bg: "#101418", ink: "#EEF2F5", muted: "#8B98A5", accent: "#22D3EE", surface: "#171C22", desc: "thin luminous rules on charcoal (DARK style)" },
+  "paper-mark":    { bg: "#F6F1E7", ink: "#1F1B14", muted: "#75705F", accent: "#166534", surface: "#FBF8F1", desc: "underline/annotation marks" },
+  "magnetic-flow": { bg: "#F6F4FB", ink: "#17131F", muted: "#6E6880", accent: "#7C3AED", surface: "#FFFFFF", desc: "flowing curved dividers" },
 };
+
+/** The exact CSS variable block + structural boilerplate the model must copy
+ *  verbatim. Removing color/structure judgment from the model eliminates the
+ *  two failure modes we've seen in production (invented dark backgrounds,
+ *  broken HF contract) and saves ~1.5K output tokens of boilerplate drift. */
+function buildSkeleton(p: StylePalette, durationSec: number): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<style>
+  :root {
+    --bg: ${p.bg};
+    --ink: ${p.ink};
+    --muted: ${p.muted};
+    --accent: ${p.accent};
+    --surface: ${p.surface};
+  }
+  html, body { margin: 0; padding: 0; }
+  [data-composition-id="root"] {
+    width: 1920px; height: 1080px; overflow: hidden; position: relative;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, "Helvetica Neue", Arial, sans-serif;
+  }
+  /* …your phase styles here… */
+</style>
+</head>
+<body>
+  <div data-composition-id="root" data-width="1920" data-height="1080" data-duration="${durationSec.toFixed(1)}">
+    <audio id="narration" class="clip" src="assets/narration.mp3" data-start="0" data-track-index="0"></audio>
+    <!-- …your phase clips here, each: class="clip" data-start data-duration data-track-index="1"… -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      /* …your tweens here (absolute seconds)… */
+      window.__timelines["root"] = tl;
+    </script>
+  </div>
+</body>
+</html>`;
+}
 
 export function buildDesignerPrompt(input: DesignBeatInput): { system: string; user: string } {
   const dur = input.audioDurationSec;
   const settleAt = Math.max(1, dur - 1).toFixed(1);
   const palette = STYLE_PALETTES[input.styleHint ?? ""] ?? STYLE_PALETTES["swiss-grid"]!;
+  const skeleton = buildSkeleton(palette, dur);
 
   const user = `Design the composition for this beat.
+
+## MANDATORY SKELETON — copy this EXACTLY, fill in the marked areas only
+
+${skeleton}
+
+Rules for the skeleton:
+- The :root CSS variables and the root div's background: var(--bg) are IMMUTABLE.
+  Do not change, override, or add any other background color on the root or body.
+  Use ONLY var(--bg), var(--ink), var(--muted), var(--accent), var(--surface)
+  for colors (rgba/opacity derivatives of them are fine for decoratives).
+- Text sits on var(--bg) or var(--surface) and must use var(--ink) or var(--muted).
+  NEVER place ink-colored text on a dark element or light text on a light element.
+- Keep the audio clip, gsap CDN script, and __timelines registration exactly as shown.
+${input.compact ? `
+## COMPACT MODE (hard output budget)
+- Exactly 2 or 3 phases, not more.
+- ONE pictorial device total (pick the single best one for the content),
+  reused/evolved across phases rather than new visuals per phase.
+- Terse CSS: shorthand properties, no comments in output, class names <= 4 chars.
+- Target under 6,500 tokens of output. If in doubt, cut decoration, never
+  the pictorial device or the timing accuracy.` : ""}
 
 BEAT: ${input.beatKey} (type: ${input.beatType})
 LESSON: ${input.lessonTitle}
@@ -152,7 +229,7 @@ ${input.onScreenText.map((t, i) => `${i + 1}. ${t}`).join("\n") || "(none — de
 CALLOUT CHIPS (small supporting labels, optional placement):
 ${input.callouts.join(" · ") || "(none)"}
 
-STYLE: ${input.styleHint ?? "swiss-grid"} — ${palette}
+STYLE: ${input.styleHint ?? "swiss-grid"} — ${palette.desc}. Colors come ONLY from the skeleton's CSS variables.
 
 ${input.wordTimestamps && input.wordTimestamps.length > 0 ? `WORD TIMINGS (whisper-aligned; "word@seconds"). Anchor each on-screen reveal to the moment its phrase is SPOKEN — start the entrance 0.1-0.2s before the first word of the phrase:
 ${input.wordTimestamps.map((w) => `${w.word.trim()}@${w.start.toFixed(1)}`).join(" ")}
@@ -172,8 +249,19 @@ export interface HfLintResult {
   issues: string[];
 }
 
-export function lintHfComposition(html: string, expectedDurationSec: number): HfLintResult {
+export function lintHfComposition(html: string, expectedDurationSec: number, styleHint?: string): HfLintResult {
   const issues: string[] = [];
+
+  // Style contract: the palette's exact bg hex must be declared as --bg and
+  // the root must use var(--bg). Catches invented backgrounds (the deepseek
+  // dark-on-dark failure) in milliseconds instead of after a 5-min render.
+  const palette = STYLE_PALETTES[styleHint ?? ""] ?? STYLE_PALETTES["swiss-grid"]!;
+  if (!new RegExp(`--bg:\\s*${palette.bg.replace("#", "#?")}`, "i").test(html)) {
+    issues.push(`:root must declare --bg: ${palette.bg} exactly (the style's mandatory background)`);
+  }
+  if (!/background:\s*var\(--bg\)/.test(html)) {
+    issues.push("Root composition must use background: var(--bg) — no invented background colors");
+  }
 
   if (!/^\s*<!doctype html>/i.test(html)) issues.push(`Must start with <!doctype html> (got: ${html.slice(0, 40)}…)`);
   if (/<template[\s>]/i.test(html)) issues.push("Standalone composition must not use <template> wrapper");
@@ -250,7 +338,7 @@ export async function designAnimatedBeat(
       continue;
     }
     const html = extractHtml(res.text);
-    const lint = lintHfComposition(html, input.audioDurationSec);
+    const lint = lintHfComposition(html, input.audioDurationSec, input.styleHint);
     if (lint.ok) return { html, attempts: attempt };
     repairNotes = lint.issues.map((i) => `- ${i}`).join("\n");
     await onNote?.(`lint failed (${lint.issues.length} issues), ${attempt === 1 ? "retrying with feedback" : "giving up"}`);
