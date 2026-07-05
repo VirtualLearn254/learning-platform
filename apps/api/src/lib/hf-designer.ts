@@ -288,6 +288,20 @@ export function lintHfComposition(html: string, expectedDurationSec: number, sty
   if (/data-layer|data-end\s*=/.test(html)) issues.push("Forbidden attributes: data-layer / data-end (use data-track-index / data-duration)");
   if (/@import\s+url|fonts\.googleapis/.test(html)) issues.push("No webfont imports — offline render");
 
+  // Content gate: an empty skeleton echo passes every structural check but
+  // renders a blank frame. Require real animation + real content.
+  const tweenCount = (html.match(/\btl\.(from|to|set|fromTo)\(/g) ?? []).length;
+  if (tweenCount < 4) {
+    issues.push(`Only ${tweenCount} timeline tween(s) — this looks like the empty skeleton, not a design. Fill in phases and tweens.`);
+  }
+  if (/your (phase clips|tweens|phase styles) here/i.test(html)) {
+    issues.push("Skeleton placeholder comments still present — replace them with the actual design.");
+  }
+  const visualClipCount = (html.match(/class="[^"]*\bclip\b[^"]*"/g) ?? []).length;
+  if (visualClipCount < 2) {
+    issues.push("No visual phase clips beyond the narration audio — add the phase content.");
+  }
+
   // Duration attr on the root composition should match the audio (±0.5s tolerated).
   const durMatch = html.match(/data-composition-id\s*=\s*["']root["'][^>]*data-duration\s*=\s*["']([\d.]+)["']/)
     ?? html.match(/data-duration\s*=\s*["']([\d.]+)["'][^>]*data-composition-id\s*=\s*["']root["']/);
@@ -307,20 +321,31 @@ export function lintHfComposition(html: string, expectedDurationSec: number, sty
  * Extract the composition from a model response. Handles:
  *  - markdown fences
  *  - reasoning models that think out loud around the HTML
- *  - draft-then-revise outputs (GLM 5.2 writes a draft, critiques it, then a
- *    refined version) — we take the LAST complete <!doctype…</html> document
+ *  - draft-then-revise outputs (draft, critique, refined version)
+ *  - SKELETON ECHOES: the prompt embeds a complete-but-empty skeleton
+ *    document; reasoning models sometimes quote it back verbatim. Taking
+ *    "the last complete document" once selected an echoed empty skeleton
+ *    and shipped a blank white render. We now score every complete
+ *    document by its animation-tween count (the empty skeleton has zero)
+ *    and pick the richest one, tie-breaking by length.
  * Returns null when no complete document exists (true truncation).
  */
 export function extractHtml(raw: string): string | null {
   const fenced = raw.match(/```(?:html)?\s*([\s\S]*?)```\s*$/);
   const body = fenced ? fenced[1]! : raw;
   const starts = [...body.matchAll(/<!doctype html>/gi)].map((m) => m.index!);
-  // Prefer the last document that is COMPLETE (has a closing </html>).
-  for (let i = starts.length - 1; i >= 0; i--) {
-    const end = body.indexOf("</html>", starts[i]!);
-    if (end >= 0) return body.slice(starts[i]!, end + 7).trim();
+
+  const candidates: Array<{ doc: string; tweens: number }> = [];
+  for (const start of starts) {
+    const end = body.indexOf("</html>", start);
+    if (end < 0) continue;
+    const doc = body.slice(start, end + 7).trim();
+    const tweens = (doc.match(/\btl\.(from|to|set|fromTo)\(/g) ?? []).length;
+    candidates.push({ doc, tweens });
   }
-  return null;
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.tweens - a.tweens || b.doc.length - a.doc.length);
+  return candidates[0]!.doc;
 }
 
 /**

@@ -91,6 +91,8 @@ const VERIFY_SYSTEM = `You are a QA reviewer for educational video frames (1920x
 Report ONLY real, visible defects:
 
 P0 (blocks render):
+- BLANK or near-blank frame: nothing but the background color visible (no
+  text, no visuals) — especially in the HERO or SETTLE frame
 - Two text blocks or cards overlapping / colliding
 - Text clipped by the frame edge or by a container (cut-off words)
 - Text running off-frame or under another element
