@@ -125,7 +125,7 @@ export default function ActivityPage() {
               <Button
                 key={q}
                 size="sm"
-                variant={queueFilter === q ? "default" : "secondary"}
+                variant={queueFilter === q ? "primary" : "secondary"}
                 onClick={() => setQueueFilter(q)}
               >
                 {q === "all" ? "All" : q.replace("_", " ")}

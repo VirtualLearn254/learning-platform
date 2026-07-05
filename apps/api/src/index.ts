@@ -6,7 +6,10 @@ import { logger } from "hono/logger";
 import { cors } from "hono/cors";
 import { getCookie } from "hono/cookie";
 
+import { sql } from "drizzle-orm";
+
 import { env } from "./env.js";
+import { db, tables } from "./db/index.js";
 import { authEnabled, verifySessionToken } from "./lib/auth.js";
 import { authRoute } from "./routes/auth.js";
 import { coursesRoute } from "./routes/courses.js";
@@ -85,6 +88,22 @@ app.onError((err, c) => {
 if (!authEnabled()) {
   console.warn("[api] ⚠️  AUTH DISABLED — set LP_ADMIN_PASSWORD (and LP_SECRETS_KEY) in .env.prod to lock the API.");
 }
+
+/**
+ * Housekeeping: the jobs table grows per pipeline action forever. Sweep
+ * daily — succeeded jobs older than 30 days, failed older than 90 (kept
+ * longer for post-mortems). Runs at boot + every 24h.
+ */
+async function sweepOldJobs() {
+  try {
+    await db.delete(tables.jobs).where(sql`status = 'succeeded' and created_at < now() - interval '30 days'`);
+    await db.delete(tables.jobs).where(sql`status = 'failed' and created_at < now() - interval '90 days'`);
+  } catch (err) {
+    console.warn("[housekeeping] job sweep failed:", err instanceof Error ? err.message : err);
+  }
+}
+void sweepOldJobs();
+setInterval(sweepOldJobs, 24 * 60 * 60 * 1000).unref();
 
 const port = env.API_PORT;
 console.log(`[api] listening on http://localhost:${port} (auth: ${authEnabled() ? "on" : "OFF"})`);

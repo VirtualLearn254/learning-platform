@@ -144,9 +144,9 @@ export const api = {
 
   // AI provider dashboard
   listAIProviders: () =>
-    fetchJson<{ providers: Array<{ id: "anthropic" | "openai" | "deepseek" | "local"; displayName: string; envKey: string; signupUrl: string; pricing: string; configured: boolean; secretName: string }> }>("/ai/providers"),
+    fetchJson<{ providers: Array<{ id: "anthropic" | "openai" | "deepseek" | "fireworks" | "local"; displayName: string; envKey: string; signupUrl: string; pricing: string; configured: boolean; secretName: string }> }>("/ai/providers"),
   listAIProfiles: () =>
-    fetchJson<{ profiles: Array<{ id: string; preferred: string[]; activeProvider: string | null; activeModel: string | null; temperature: number; maxTokens: number; supportsVision: boolean }> }>("/ai/profiles"),
+    fetchJson<{ profiles: Array<{ id: string; preferred: string[]; activeProvider: string | null; activeModel: string | null; defaultModel?: string | null; temperature: number; defaultTemperature?: number; maxTokens: number; defaultMaxTokens?: number; supportsVision: boolean; isOverridden?: boolean }> }>("/ai/profiles"),
   testAIProvider: (provider: string) =>
     fetchJson<{ ok: boolean; model?: string; actualModel?: string; latencyMs?: number; sample?: string; usage?: { inputTokens: number; outputTokens: number }; error?: string }>(`/ai/test/${provider}`, { method: "POST" }),
 
@@ -166,7 +166,7 @@ export const api = {
 
   // AI model catalog + role overrides
   listAIModels: () =>
-    fetchJson<{ catalog: Record<"anthropic" | "openai" | "deepseek" | "local", Array<{ id: string; displayName: string; inputPer1M: number; outputPer1M: number; supportsVision?: boolean; speed?: string; tier?: string }>> }>("/ai/models"),
+    fetchJson<{ catalog: Record<"anthropic" | "openai" | "deepseek" | "fireworks" | "local", Array<{ id: string; displayName: string; inputPer1M: number; outputPer1M: number; supportsVision?: boolean; speed?: string; tier?: string }>> }>("/ai/models"),
   saveAIProfile: (id: string, patch: { preferredProvider?: string; modelId?: string; temperature?: number; maxTokens?: number }) =>
     fetchJson<{ ok: boolean; error?: string }>(`/ai/profiles/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
   resetAIProfile: (id: string) =>

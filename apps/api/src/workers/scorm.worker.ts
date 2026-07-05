@@ -20,7 +20,10 @@ import { db, tables } from "../db/index.js";
 import { QueueNames } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
 import { s3 } from "../lib/s3.js";
+import { buildLessonPdfs } from "../lib/pdf.js";
 import { scormPackager, notifications } from "./services.js";
+
+type PdfQuiz = { question?: string; options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> } | null;
 
 interface JobData { lessonId: string }
 
@@ -97,6 +100,35 @@ export function startScormWorker() {
       const zipKey = `lessons/${lessonId}/lesson.scorm.zip`;
       await note(`uploading ${(built.sizeBytes / 1024 / 1024).toFixed(2)} MB zip · sha256=${built.sha256.slice(0, 12)}…`);
       await s3.putObject(zipKey, built.zip, { contentType: "application/zip" });
+
+      // PDF companions: reading companion + instructor summary/answer key.
+      // Best-effort — a PDF failure never blocks the SCORM publish.
+      try {
+        await note("building PDF companions");
+        const pdfs = await buildLessonPdfs({
+          lessonTitle: lesson.title,
+          summary: lesson.summary,
+          organizationName: "Learning Platform",
+          beats: mainBeats.map((b) => {
+            const vis = (b.visualSpec ?? {}) as { onScreenText?: string[]; callouts?: string[] };
+            return {
+              beatKey: b.beatKey,
+              beatType: b.beatType,
+              script: b.script,
+              onScreenText: vis.onScreenText ?? [],
+              callouts: vis.callouts ?? [],
+              quiz: b.quiz as PdfQuiz,
+            };
+          }),
+        });
+        await Promise.all([
+          s3.putObject(`lessons/${lessonId}/content.pdf`, pdfs.content, { contentType: "application/pdf" }),
+          s3.putObject(`lessons/${lessonId}/summary.pdf`, pdfs.summary, { contentType: "application/pdf" }),
+        ]);
+        await note(`PDFs uploaded (${(pdfs.content.length / 1024).toFixed(0)} KB + ${(pdfs.summary.length / 1024).toFixed(0)} KB)`);
+      } catch (pdfErr) {
+        console.warn(`[scorm:${jobId.slice(0, 8)}] PDF build failed (publish continues):`, pdfErr instanceof Error ? pdfErr.message : pdfErr);
+      }
 
       await db.update(tables.lessons).set({
         scormPackageKey: zipKey,

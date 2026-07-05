@@ -60,7 +60,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       });
       mutate();
     } catch (e) {
-      notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   }
 
@@ -71,7 +71,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       notify({ title: "Holistic review queued — runs against Claude opus profile", variant: "success" });
       mutate();
     } catch (e) {
-      notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   }
 
@@ -82,7 +82,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       notify({ title: "Publishing queued — building SCORM 2004 zip", variant: "success" });
       mutate();
     } catch (e) {
-      notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   }
 
@@ -93,7 +93,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       notify({ title: "Stitch queued — concatenating beats into master mp4", variant: "success" });
       mutate();
     } catch (e) {
-      notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   }
 
@@ -109,7 +109,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       });
       mutate();
     } catch (e) {
-      notify({ title: e instanceof Error ? e.message : String(e), variant: "error" });
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   }
 
@@ -260,6 +260,10 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                   >
                     <Download className="w-3.5 h-3.5" /> Download MP4
                   </a>
+                  {lesson.publishedAt && (<>
+                    <a href={`/api/files/${encodeURIComponent(`lessons/${lesson.id}/content.pdf`)}`} download className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Download className="w-3.5 h-3.5" /> Companion PDF</a>
+                    <a href={`/api/files/${encodeURIComponent(`lessons/${lesson.id}/summary.pdf`)}`} download className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Download className="w-3.5 h-3.5" /> Answer key PDF</a>
+                  </>)}
                   {scormUrl && (
                     <a
                       href={scormUrl}
@@ -272,11 +276,6 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                 </div>
               </div>
               <VideoPlayer src={masterUrl} controls />
-              {false && scormUrl && (
-                <a href={scormUrl} className="mt-4 inline-flex items-center gap-2 text-sm text-[var(--color-accent)] hover:underline">
-                  <Download className="w-3.5 h-3.5" /> Download SCORM package
-                </a>
-              )}
             </Card>
           )}
 

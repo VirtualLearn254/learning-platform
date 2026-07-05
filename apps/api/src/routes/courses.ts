@@ -110,10 +110,11 @@ export const coursesRoute = new Hono()
       if (!lessonsByModule.has(l.moduleId)) lessonsByModule.set(l.moduleId, []);
       lessonsByModule.get(l.moduleId)!.push({ ...l, beats: beatsByLesson.get(l.id) ?? [] });
     }
-    const modulesBySection = new Map<string, Array<typeof moduleRows[number] & { lessons: ReturnType<typeof Array.prototype.values> }>>();
+    type LessonWithBeats = NonNullable<ReturnType<typeof lessonsByModule.get>>;
+    const modulesBySection = new Map<string, Array<typeof moduleRows[number] & { lessons: LessonWithBeats }>>();
     for (const m of moduleRows) {
       if (!modulesBySection.has(m.sectionId)) modulesBySection.set(m.sectionId, []);
-      modulesBySection.get(m.sectionId)!.push({ ...m, lessons: lessonsByModule.get(m.id) ?? [] as never });
+      modulesBySection.get(m.sectionId)!.push({ ...m, lessons: lessonsByModule.get(m.id) ?? [] });
     }
     const tree = {
       ...course,

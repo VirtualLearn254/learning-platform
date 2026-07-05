@@ -9,3 +9,4 @@ const client = postgres(env.DATABASE_URL, { max: 10 });
 export const db = drizzle(client, { schema });
 export type DB = typeof db;
 export * as tables from "./schema.js";
+export type { ReviewIssue } from "./schema.js";

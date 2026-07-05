@@ -6,9 +6,8 @@ const config: NextConfig = {
   output: "standalone",
   // Allow importing from the @lp/shared workspace package.
   transpilePackages: ["@lp/shared"],
-  // Bypass TS / ESLint blocking the production build — surface those via
-  // `npm run typecheck` / `npm run lint` in CI instead of at image build.
-  typescript: { ignoreBuildErrors: true },
+  // TS errors now FAIL the build (workspace is at zero errors; CI keeps it
+  // there). ESLint stays advisory to keep image builds fast.
   eslint: { ignoreDuringBuilds: true },
   /**
    * In dev we proxy /api/* to the backend so the browser doesn't see two
