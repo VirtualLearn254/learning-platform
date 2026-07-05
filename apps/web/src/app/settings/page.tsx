@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-type Provider = "anthropic" | "openai" | "deepseek" | "local";
+type Provider = "anthropic" | "openai" | "deepseek" | "fireworks" | "local";
 
 export default function SettingsPage() {
   return (
