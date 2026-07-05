@@ -61,6 +61,9 @@ services:
       # interpolation doesn't read env_file and would silently fall back.
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
+      # Parallel render jobs. 2 = proven stable on 6vCPU/12GB; try 3 and
+      # watch /activity for Chrome crashes before committing to it.
+      RENDER_CONCURRENCY: "${RENDER_CONCURRENCY:-2}"
     command: ["npx", "tsx", "apps/api/src/workers/index.ts"]
     depends_on:
       postgres:

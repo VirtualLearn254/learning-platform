@@ -44,6 +44,12 @@ interface JobData {
 /** Feature flag: animated render on by default; RENDER_MODE=static disables. */
 const ANIMATED_ENABLED = (process.env.RENDER_MODE ?? "animated") !== "static";
 
+/** Parallel render jobs. 2 is the proven-stable setting for a 6vCPU/12GB box
+ *  (4 caused ~9% Chrome crashes on this hardware class). 3 may work because
+ *  each job spends 1-2 min in the network-bound design phase — raise via
+ *  RENDER_CONCURRENCY and watch the failure rate on /activity. */
+const RENDER_CONCURRENCY = Math.max(1, Math.min(6, Number(process.env.RENDER_CONCURRENCY ?? 2) || 2));
+
 export function startRenderWorker() {
   return new Worker<JobData>(QueueNames.Render, async (job) => {
     const { beatId, staticOnly } = job.data;
@@ -268,5 +274,5 @@ export function startRenderWorker() {
     } catch (err) {
       return await fail(err);
     }
-  }, { connection: workerConnection, concurrency: 2 });
+  }, { connection: workerConnection, concurrency: RENDER_CONCURRENCY });
 }
