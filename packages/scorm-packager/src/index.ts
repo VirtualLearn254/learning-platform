@@ -113,33 +113,67 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     pointer-events: none;
   }
   .status.complete { color: #34D399; }
-  /* ── Quiz overlay ── */
-  .quiz-overlay {
-    position: absolute; inset: 0; display: none;
-    background: rgba(10,10,10,0.88); backdrop-filter: blur(4px);
-    align-items: center; justify-content: center; padding: 24px;
+  /* ── Quiz scene ──────────────────────────────────────────────
+     Not a popup. A full-frame takeover positioned EXACTLY over the
+     video's 16:9 content box, rendered in the same palette CSS vars
+     the designer used for the beat — so it plays as the next
+     sub-scene of the video. Per-cue colors arrive as --q-* vars. */
+  .quiz-scene {
+    position: absolute; display: none; overflow: hidden;
+    background: var(--q-bg, #101418); color: var(--q-ink, #EEF2F5);
+    opacity: 0; transition: opacity 0.35s ease;
+    font-family: system-ui, "Helvetica Neue", Arial, sans-serif;
   }
-  .quiz-overlay.open { display: flex; }
-  .quiz-card {
-    width: 100%; max-width: 640px; background: #16181c;
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 32px;
+  .quiz-scene.open { display: block; }
+  .quiz-scene.visible { opacity: 1; }
+  .qz-frame {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 4.2em 5em; box-sizing: border-box;
   }
-  .quiz-eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #34D399; margin-bottom: 10px; }
-  .quiz-q { font-size: 22px; font-weight: 600; line-height: 1.35; margin-bottom: 20px; }
-  .quiz-opt {
-    display: block; width: 100%; text-align: left; margin: 8px 0; padding: 14px 16px;
-    background: #1e2126; color: #eee; border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 10px; font-size: 16px; cursor: pointer; font-family: inherit;
+  .qz-deco {
+    position: absolute; right: -0.12em; bottom: -0.38em;
+    font-size: 15em; font-weight: 800; line-height: 1;
+    color: var(--q-accent-faint, rgba(255,255,255,0.05));
+    pointer-events: none; user-select: none;
   }
-  .quiz-opt:hover:not(:disabled) { border-color: #34D399; }
-  .quiz-opt.correct { border-color: #34D399; background: rgba(52,211,153,0.12); }
-  .quiz-opt.wrong { border-color: #F87171; background: rgba(248,113,113,0.12); }
-  .quiz-feedback { margin-top: 14px; font-size: 14px; color: rgba(255,255,255,0.75); line-height: 1.45; min-height: 20px; }
-  .quiz-continue {
-    margin-top: 18px; padding: 12px 28px; background: #34D399; color: #08221a;
-    border: 0; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; display: none;
+  .qz-rule { width: 3.2em; height: 0.22em; background: var(--q-accent, #22D3EE); border-radius: 0.11em; margin-bottom: 1.1em; }
+  .qz-eyebrow {
+    font-size: 0.62em; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--q-accent, #22D3EE); font-weight: 700; margin-bottom: 0.9em;
   }
-  .quiz-continue.show { display: inline-block; }
+  .qz-q {
+    font-size: 1.55em; font-weight: 700; line-height: 1.25;
+    letter-spacing: -0.01em; max-width: 78%; margin-bottom: 1.1em;
+  }
+  .qz-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7em; max-width: 82%; }
+  .qz-opt {
+    text-align: left; padding: 0.85em 1em;
+    background: var(--q-surface, #171C22); color: var(--q-ink, #EEF2F5);
+    border: 1.5px solid var(--q-line, rgba(0,0,0,0.14)); border-radius: 0.55em;
+    font-size: 0.82em; line-height: 1.35; cursor: pointer; font-family: inherit;
+    transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+  }
+  .qz-opt .k { color: var(--q-accent, #22D3EE); font-weight: 700; margin-right: 0.55em; }
+  .qz-opt:hover:not(:disabled) { border-color: var(--q-accent, #22D3EE); transform: translateY(-2px); }
+  .qz-opt:disabled { cursor: default; }
+  /* Verdicts use fixed semantic colors — palettes with red/green accents
+     (swiss-grid, paper-mark) would otherwise make right and wrong identical. */
+  .qz-opt.correct { border-color: #10B981; background: rgba(16,185,129,0.12); }
+  .qz-opt.correct .k { color: #10B981; }
+  .qz-opt.wrong { border-color: #EF4444; background: rgba(239,68,68,0.1); }
+  .qz-opt.wrong .k { color: #EF4444; }
+  .qz-foot { display: flex; align-items: center; gap: 1.2em; margin-top: 1.2em; min-height: 2.4em; max-width: 82%; }
+  .qz-fb { font-size: 0.72em; line-height: 1.45; color: var(--q-muted, #8B98A5); flex: 1; }
+  .qz-go {
+    padding: 0.7em 1.6em; background: var(--q-accent, #22D3EE); color: var(--q-btn-ink, #08221a);
+    border: 0; border-radius: 2em; font-size: 0.78em; font-weight: 700; cursor: pointer;
+    font-family: inherit; display: none; white-space: nowrap;
+  }
+  .qz-go.show { display: inline-block; }
+  /* Staggered entrance — each element rises in like a designed reveal. */
+  .qz-anim { opacity: 0; transform: translateY(0.8em); transition: opacity 0.45s ease, transform 0.45s ease; }
+  .qz-anim.in { opacity: 1; transform: translateY(0); }
 </style>
 </head>
 <body>
@@ -147,13 +181,17 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     <div class="title-badge">${title}</div>
     <video id="v" src="master.mp4" controls autoplay preload="metadata" playsinline></video>
     <div class="status" id="status">connecting…</div>
-    <div class="quiz-overlay" id="qz">
-      <div class="quiz-card">
-        <div class="quiz-eyebrow">Check your understanding</div>
-        <div class="quiz-q" id="qz-q"></div>
-        <div id="qz-opts"></div>
-        <div class="quiz-feedback" id="qz-fb"></div>
-        <button class="quiz-continue" id="qz-go">Continue ▸</button>
+    <div class="quiz-scene" id="qz">
+      <div class="qz-frame">
+        <div class="qz-deco">?</div>
+        <div class="qz-rule qz-anim"></div>
+        <div class="qz-eyebrow qz-anim">Check your understanding</div>
+        <div class="qz-q qz-anim" id="qz-q"></div>
+        <div class="qz-opts" id="qz-opts"></div>
+        <div class="qz-foot">
+          <div class="qz-fb" id="qz-fb"></div>
+          <button class="qz-go" id="qz-go">Continue &#9656;</button>
+        </div>
       </div>
     </div>
   </div>
@@ -172,10 +210,67 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
   var correctCount = 0;
   var answeredCount = 0;
 
+  // ── Seamless quiz scene ─────────────────────────────────────
+  // Position the scene exactly over the video's rendered 16:9 content
+  // box (object-fit: contain leaves letterbox bars we must NOT cover),
+  // and scale all typography off the frame width so the layout matches
+  // the 1920×1080 design grid of the beats themselves.
+  function hexToRgba(hex, a) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return 'rgba(255,255,255,' + a + ')';
+    var n = parseInt(m[1], 16);
+    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function isDark(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return true;
+    var n = parseInt(m[1], 16);
+    return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) < 140;
+  }
+  function fitSceneToVideo() {
+    var W = video.clientWidth, H = video.clientHeight;
+    var ar = (video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 16 / 9;
+    var w = Math.min(W, H * ar), h = w / ar;
+    var x = video.offsetLeft + (W - w) / 2, y = video.offsetTop + (H - h) / 2;
+    overlay.style.left = x + 'px'; overlay.style.top = y + 'px';
+    overlay.style.width = w + 'px'; overlay.style.height = h + 'px';
+    overlay.style.fontSize = (w / 42) + 'px'; // em unit ≈ the beats' design scale
+  }
+  window.addEventListener('resize', function() {
+    if (overlay.classList.contains('open')) fitSceneToVideo();
+  });
+
+  function applyPalette(style) {
+    var s = style || {};
+    var bg = s.bg || '#101418', ink = s.ink || '#EEF2F5', accent = s.accent || '#22D3EE';
+    overlay.style.setProperty('--q-bg', bg);
+    overlay.style.setProperty('--q-ink', ink);
+    overlay.style.setProperty('--q-muted', s.muted || '#8B98A5');
+    overlay.style.setProperty('--q-accent', accent);
+    overlay.style.setProperty('--q-surface', s.surface || (isDark(bg) ? 'rgba(255,255,255,0.07)' : '#FFFFFF'));
+    overlay.style.setProperty('--q-line', hexToRgba(ink, 0.16));
+    overlay.style.setProperty('--q-accent-soft', hexToRgba(accent, 0.13));
+    overlay.style.setProperty('--q-accent-faint', hexToRgba(accent, isDark(bg) ? 0.08 : 0.07));
+    overlay.style.setProperty('--q-btn-ink', isDark(accent) ? '#FFFFFF' : '#101418');
+  }
+
+  // Render "x^2" / "y^-9" with real superscripts — the videos typeset
+  // exponents properly, so the quiz must too or the takeover breaks.
+  // DOM-built (text nodes + <sup>), never innerHTML.
+  function renderRich(el, text) {
+    el.textContent = '';
+    var parts = String(text || '').split(/\\^(-?[0-9a-zA-Z]+)/);
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) { el.appendChild(document.createTextNode(parts[i])); }
+      else { var s = document.createElement('sup'); s.textContent = parts[i]; el.appendChild(s); }
+    }
+  }
+
   function showQuiz(cue, idx) {
     asked[idx] = true;
     video.pause();
-    document.getElementById('qz-q').textContent = cue.quiz.question;
+    applyPalette(cue.style);
+    renderRich(document.getElementById('qz-q'), cue.quiz.question);
     var fb = document.getElementById('qz-fb');
     var go = document.getElementById('qz-go');
     fb.textContent = '';
@@ -183,34 +278,55 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     var box = document.getElementById('qz-opts');
     box.innerHTML = '';
     var answered = false;
-    cue.quiz.options.forEach(function(opt) {
+    var letters = 'ABCDEFGH';
+    cue.quiz.options.forEach(function(opt, i) {
       var b = document.createElement('button');
-      b.className = 'quiz-opt';
-      b.textContent = opt.text;
+      b.className = 'qz-opt qz-anim';
+      var k = document.createElement('span');
+      k.className = 'k';
+      k.textContent = letters.charAt(i);
+      var body = document.createElement('span');
+      renderRich(body, opt.text);
+      b.appendChild(k);
+      b.appendChild(body);
       b.onclick = function() {
         if (answered) return;
         answered = true;
         answeredCount++;
         var right = !!opt.isCorrect;
         if (right) correctCount++;
-        b.className = 'quiz-opt ' + (right ? 'correct' : 'wrong');
+        b.classList.add(right ? 'correct' : 'wrong');
         // Reveal the correct one when the learner missed it.
         if (!right) {
-          Array.prototype.forEach.call(box.children, function(el, i) {
-            if (cue.quiz.options[i] && cue.quiz.options[i].isCorrect) el.className = 'quiz-opt correct';
+          Array.prototype.forEach.call(box.children, function(el, j) {
+            if (cue.quiz.options[j] && cue.quiz.options[j].isCorrect) el.classList.add('correct');
           });
         }
-        fb.textContent = opt.feedback || (right ? 'Correct.' : 'Not quite — the highlighted answer is correct.');
+        renderRich(fb, opt.feedback || (right ? 'Correct.' : 'Not quite — the highlighted answer is correct.'));
         Array.prototype.forEach.call(box.children, function(el) { el.disabled = true; });
         go.classList.add('show');
       };
       box.appendChild(b);
     });
     go.onclick = function() {
-      overlay.classList.remove('open');
-      video.play();
+      overlay.classList.remove('visible'); // crossfade back to the paused frame…
+      setTimeout(function() {
+        overlay.classList.remove('open');
+        video.play();                      // …then the video carries on.
+      }, 360);
     };
+    fitSceneToVideo();
     overlay.classList.add('open');
+    // Crossfade in from the paused frame, then stagger the reveals —
+    // same rhythm as a designed beat, not a dialog popping open.
+    var anims = overlay.querySelectorAll('.qz-anim');
+    Array.prototype.forEach.call(anims, function(el) { el.classList.remove('in'); });
+    requestAnimationFrame(function() {
+      overlay.classList.add('visible');
+      Array.prototype.forEach.call(anims, function(el, i) {
+        setTimeout(function() { el.classList.add('in'); }, 380 + i * 110);
+      });
+    });
   }
 
   if (QUIZZES.length > 0) {
@@ -279,6 +395,10 @@ export interface ScormQuizCue {
     question: string;
     options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>;
   };
+  /** The beat's style palette (same CSS vars the designer rendered the video
+   *  with). When present, the quiz scene takes over the frame in these colors
+   *  so it reads as the next sub-scene of the video. Omitted = neutral dark. */
+  style?: { bg: string; ink: string; muted: string; accent: string; surface: string };
 }
 
 export interface ScormBuildInput {

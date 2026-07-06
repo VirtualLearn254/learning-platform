@@ -21,6 +21,7 @@ import { QueueNames } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
 import { s3 } from "../lib/s3.js";
 import { buildLessonPdfs } from "../lib/pdf.js";
+import { getStylePalette } from "../lib/hf-designer.js";
 import { scormPackager, notifications } from "./services.js";
 
 type PdfQuiz = { question?: string; options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> } | null;
@@ -70,18 +71,23 @@ export function startScormWorker() {
 
       // Interactive quiz cues: quiz beats pause the player near the END of
       // their segment (the narration poses the question first). Offsets come
-      // from cumulative beat durations in stitch order.
+      // from cumulative beat durations in stitch order. Each cue carries the
+      // beat's style palette so the quiz scene renders in the SAME colors as
+      // the video it interrupts — seamless takeover, not a popup.
+      const lessonStyle = (lesson.styleHints ?? null) as { style?: string } | null;
       const mainBeats = beats.filter((b) => !b.isAlt);
-      const quizzes: Array<{ atSec: number; beatKey: string; quiz: { type: string; question: string; options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> } }> = [];
+      const quizzes: Array<{ atSec: number; beatKey: string; quiz: { type: string; question: string; options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> }; style: ReturnType<typeof getStylePalette> }> = [];
       let offset = 0;
       for (const b of mainBeats) {
         const dur = b.durationSeconds ?? 0;
         const quiz = b.quiz as { type?: string; question?: string; options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> } | null;
         if (quiz?.question && Array.isArray(quiz.options) && quiz.options.length >= 2) {
+          const vis = (b.visualSpec ?? {}) as { style?: string };
           quizzes.push({
             atSec: Math.max(0, offset + dur - 0.4),
             beatKey: b.beatKey,
             quiz: { type: quiz.type ?? "multiple_choice", question: quiz.question, options: quiz.options },
+            style: getStylePalette(vis.style ?? lessonStyle?.style),
           });
         }
         offset += dur;

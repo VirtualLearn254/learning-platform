@@ -30,6 +30,7 @@ async function main() {
             { id: "b", text: "No", feedback: "Compare with the perfect squares 4 and 9." },
           ],
         },
+        style: { bg: "#F6F1E7", ink: "#1F1B14", muted: "#75705F", accent: "#166534", surface: "#FBF8F1" },
       },
     ],
     branding: { organizationName: "Learning Platform" },
@@ -68,6 +69,8 @@ async function main() {
     ["correct flag preserved", q?.quiz?.options?.[0]?.isCorrect === true],
     ["setScore wired", html.includes("scorm.setScore(")],
     ["completion wired", html.includes("scorm.setStatus('completed')")],
+    ["style palette survives round-trip", q?.style?.bg === "#F6F1E7" && q?.style?.accent === "#166534"],
+    ["seamless scene (palette vars + frame fit)", html.includes("applyPalette(") && html.includes("fitSceneToVideo(") && html.includes("--q-bg")],
   ];
   for (const [name, ok] of htmlChecks) {
     console.log(`3. player ${name}: ${ok ? "PASS" : "FAIL"}`);

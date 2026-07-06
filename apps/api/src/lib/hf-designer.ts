@@ -147,6 +147,14 @@ const STYLE_PALETTES: Record<string, StylePalette> = {
   "magnetic-flow": { bg: "#F6F4FB", ink: "#17131F", muted: "#6E6880", accent: "#7C3AED", surface: "#FFFFFF", desc: "flowing curved dividers" },
 };
 
+/** Palette lookup for consumers outside the designer (e.g. the SCORM quiz
+ *  overlay, which must render in the SAME colors as the beat's video so the
+ *  quiz reads as the next sub-scene rather than a foreign popup). */
+export function getStylePalette(styleHint?: string): { bg: string; ink: string; muted: string; accent: string; surface: string } {
+  const p = STYLE_PALETTES[styleHint ?? ""] ?? STYLE_PALETTES["swiss-grid"]!;
+  return { bg: p.bg, ink: p.ink, muted: p.muted, accent: p.accent, surface: p.surface };
+}
+
 /** The exact CSS variable block + structural boilerplate the model must copy
  *  verbatim. Removing color/structure judgment from the model eliminates the
  *  two failure modes we've seen in production (invented dark backgrounds,
