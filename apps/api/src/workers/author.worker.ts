@@ -27,16 +27,43 @@ const VisualSpecOut = z.object({
   callouts: z.array(z.string().min(1).max(80)).min(0).max(4).default([]),
 });
 
+/** AI-authorable quiz types — the player engine's catalog MINUS the two
+ *  image-dependent types (hotspot, image_choice), which need art the author
+ *  can't produce at authoring time. */
+const AUTHORABLE_QUIZ_TYPES = [
+  "multiple_choice", "true_false", "multi_select", "fill_in",
+  "match", "ordering", "sort_into", "word_bank",
+  "scenario", "likert", "flashcard", "estimate",
+  "memory_pairs", "this_or_that", "word_search", "guess_concept",
+] as const;
+
 const QuizOut = z.object({
-  type: z.enum(["multiple_choice", "match", "fill_in", "scenario", "likert"]),
+  type: z.enum(AUTHORABLE_QUIZ_TYPES),
   question: z.string().min(5).max(500),
   bloomLevel: z.enum(["remember", "understand", "apply", "analyze", "evaluate", "create"]).optional(),
+  instructions: z.string().max(160).optional(),
   options: z.array(z.object({
     id: z.string(),
     text: z.string().max(300),
     isCorrect: z.boolean().optional(),
     feedback: z.string().max(300).optional(),
-  })).min(2).max(6),
+    matchTargetId: z.string().optional(),
+    numericValue: z.number().optional(),
+    numericTolerancePct: z.number().optional(),
+  })).min(1).max(14),
+  correctFeedback: z.string().max(300).optional(),
+  wrongFeedback: z.string().max(300).optional(),
+  adaptivity: z.object({
+    wrong: z.object({
+      rewatchBeatKey: z.string().optional(),
+      message: z.string().max(200).optional(),
+      maxAttempts: z.number().int().min(0).max(3).optional(),
+    }).optional(),
+    correct: z.object({
+      skipToBeatKey: z.string().optional(),
+      seekLabel: z.string().max(40).optional(),
+    }).optional(),
+  }).optional(),
 }).optional();
 
 const AuthorOutput = z.object({
@@ -78,8 +105,38 @@ PEDAGOGY RULES (strict — these are non-negotiable):
 - Hook beats: open with a question or a surprising fact that motivates the topic.
 - Concept beats: teach ONE idea cleanly. Define -> intuition -> mini-example.
 - Example beats: walk a worked example step by step, stating numbers explicitly.
-- Check beats: pose a single question that tests understanding. Do NOT give the answer in the narration. ALSO include a "quiz" field in your JSON (only for check beats): {"type": "multiple_choice"|"fill_in"|"match"|"scenario", "question": string, "bloomLevel": "remember"|"understand"|"apply"|"analyze", "options": [{"id": "a", "text": string, "isCorrect": boolean, "feedback": one-line WHY it is right/wrong}]}. 3-4 options; distractors must target REAL misconceptions from this lesson (a plausible wrong step), never random noise. Type: computation -> fill_in (options are candidate answers), definitions/classification -> multiple_choice, judgment -> scenario.
+- Check beats: pose a single question that tests understanding. Do NOT give the answer in the narration. ALSO include a "quiz" field in your JSON (only for check beats) — see QUIZ AUTHORING below.
 - Recap beats: summarise the lesson's main ideas in 2-3 lines.
+
+QUIZ AUTHORING (check beats only — the quiz becomes an interactive pause in the video):
+
+Pick the ONE type that fits what is being tested. The catalog, by cognitive level:
+- remember:   "true_false" (a misconception stated as fact), "flashcard" (recall a definition, then self-check), "memory_pairs" (pair terms with meanings)
+- understand: "multiple_choice" (one right answer), "word_bank" (complete the principle sentence), "match" (concepts to their rules), "guess_concept" (identify the term from progressive clues)
+- apply:      "fill_in" (a COMPUTED answer they type), "estimate" (numeric intuition on a slider), "ordering" (steps of a procedure), "sort_into" (classify items into 2-3 categories), "this_or_that" (rapid-fire classification)
+- analyze/evaluate: "scenario" (a situation + what-would-you-do), "multi_select" (select ALL that apply)
+- reflection only: "likert" (no wrong answers — confidence/stance)
+VARIETY IS MANDATORY: look at the quiz types already used by earlier check beats in this lesson (listed in the context) and pick a DIFFERENT type unless pedagogy truly demands a repeat. Across a lesson, checks should feel like different games, not the same form.
+NEVER use "hotspot" or "image_choice" (they require images you cannot produce).
+
+Schema: {"type": ..., "question": string, "bloomLevel": ..., "options": [...], "correctFeedback"?: string, "wrongFeedback"?: string, "adaptivity"?: {...}}
+
+Per-type option conventions (follow EXACTLY — the player depends on them):
+- multiple_choice / scenario: 3-4 options, exactly one isCorrect; EVERY option carries "feedback" — one line explaining WHY it is right, or WHICH real misconception the distractor represents. Distractors = plausible wrong steps from THIS lesson, never noise.
+- true_false: 2 options ("True"/"False"), one isCorrect, feedback on both.
+- multi_select: 4-6 options, 2+ isCorrect; use quiz-level correctFeedback/wrongFeedback (per-option feedback does not fit set answers).
+- fill_in: options are the ACCEPTED ANSWERS (all isCorrect: true) — include spelling/notation variants (e.g. "x^3" and "x3"); for numeric answers set numericValue and numericTolerancePct. Math notation: use ^ for exponents (the player typesets real superscripts).
+- match / sort_into: options WITHOUT matchTargetId are the targets (right column / buckets, 2-3 of them); the remaining options each set matchTargetId to their target's id. match: 3 pairs. sort_into: 4-6 items.
+- ordering: 3-5 options listed in the CORRECT order (the player shuffles the display).
+- word_bank: the question contains ___ gaps (three underscores each); isCorrect options fill the gaps IN ORDER; add 1-2 non-correct distractor words.
+- estimate: exactly 3 options — {"id":"min","text":"min","numericValue":N}, {"id":"max","text":"max","numericValue":N}, and the answer {"id":"answer","text":"<the number>","isCorrect":true,"numericValue":N,"numericTolerancePct":5-15}.
+- memory_pairs: 3-4 pairs = 6-8 options; each pair's first option sets matchTargetId to its partner's id (partner has no matchTargetId).
+- this_or_that: 2 bucket options first (no matchTargetId, e.g. "Phishing"/"Legit"), then 4-6 short statements each with matchTargetId pointing at a bucket.
+- word_search: 3-5 options, each a single WORD (A-Z only) with isCorrect: true — key vocabulary from the lesson.
+- guess_concept: one isCorrect option = the accepted answer (add spelling-variant options also isCorrect), plus 3-4 NON-correct options that are the CLUES, ordered from vague to nearly-giving-it-away.
+- flashcard: 1 option, isCorrect: true — the full answer shown on the card back; its feedback is the one-line takeaway.
+
+ADAPTIVITY (include on every quiz): {"wrong": {"rewatchBeatKey": "<beatKey of the earlier beat that TEACHES the tested concept>", "message": "one line telling them what to look for when rewatching"}}. Pick the beat key from the earlier-beats list. On a wrong answer the player rewinds there, replays it, and re-asks — so the message should direct attention ("Watch how the exponents are subtracted, not divided"). Optionally add {"correct": {"skipToBeatKey": ...}} ONLY when a later beat is pure remediation that a correct answer earns skipping.
 
 VISUAL SPEC RULES:
 - onScreenText: 2-5 short phrases the player displays as text overlays synced to narration.
@@ -105,6 +162,8 @@ function buildUserPrompt(args: {
   beatsInLesson: number;
   outline: string;
   earlierBeats: Array<{ beatType: string; beatKey: string; outline: string }>;
+  allEarlierBeatKeys: string[];
+  earlierQuizTypes: string[];
   revisionFeedback?: string;
 }): string {
   const lines: string[] = [];
@@ -122,6 +181,11 @@ function buildUserPrompt(args: {
     for (const b of args.earlierBeats) {
       lines.push(`  - [${b.beatType}] ${b.beatKey}: ${b.outline}`);
     }
+  }
+  if (args.beatType === "check") {
+    lines.push("");
+    lines.push(`REWATCH TARGETS (valid beatKeys for adaptivity.wrong.rewatchBeatKey): ${args.allEarlierBeatKeys.join(", ") || "(none — omit rewatchBeatKey)"}`);
+    lines.push(`QUIZ TYPES ALREADY USED by earlier checks in this lesson: ${args.earlierQuizTypes.join(", ") || "(none yet — free choice)"} — pick a DIFFERENT type.`);
   }
   if (args.revisionFeedback) {
     lines.push("");
@@ -188,10 +252,14 @@ export function startAuthorWorker() {
       const allLessonBeats = await db.select().from(tables.beats)
         .where(eq(tables.beats.lessonId, beat.lessonId));
       const orderedBeats = allLessonBeats.sort((a, b) => a.order - b.order);
-      const earlierBeats = orderedBeats
-        .filter((b) => b.order < beat.order)
+      const allEarlier = orderedBeats.filter((b) => b.order < beat.order && !b.isAlt);
+      const earlierBeats = allEarlier
         .slice(-4)
         .map((b) => ({ beatType: b.beatType, beatKey: b.beatKey, outline: b.script.slice(0, 200) }));
+      // Quiz variety: which types have earlier checks already used?
+      const earlierQuizTypes = [...new Set(allEarlier
+        .map((b) => (b.quiz as { type?: string } | null)?.type)
+        .filter((t): t is string => !!t))];
 
       // Pull latest feedback if revising.
       let revisionFeedback: string | undefined;
@@ -218,6 +286,8 @@ export function startAuthorWorker() {
         beatsInLesson: orderedBeats.length,
         outline: beat.script,
         earlierBeats,
+        allEarlierBeatKeys: allEarlier.map((b) => b.beatKey),
+        earlierQuizTypes,
         revisionFeedback,
       });
 
