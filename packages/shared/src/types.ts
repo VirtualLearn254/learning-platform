@@ -123,6 +123,8 @@ export interface QuizSpec {
   type: QuizType;
   question: string;
   eyebrow?: string;
+  /** Overrides the type's default one-line usage hint. */
+  instructions?: string;
   bloomLevel?: BloomLevel;
   /** hotspot: the image that is the question canvas (URL or data URI). */
   image?: string;

@@ -114,8 +114,10 @@ const QUIZ_SCENE_CSS = `
   .qz-rule { width: 3.2em; height: 0.22em; background: var(--q-accent, #22D3EE); border-radius: 0.11em; margin-bottom: 1.1em; }
   .qz-eyebrow {
     font-size: 0.62em; letter-spacing: 0.2em; text-transform: uppercase;
-    color: var(--q-accent, #22D3EE); font-weight: 700; margin-bottom: 0.9em;
+    color: var(--q-accent, #22D3EE); font-weight: 700; margin-bottom: 0.35em;
   }
+  /* One-line how-to under the eyebrow — every interaction explains itself. */
+  .qz-howto { font-size: 0.6em; color: var(--q-muted, #8B98A5); margin-bottom: 1.2em; line-height: 1.4; }
   .qz-q {
     font-size: 1.55em; font-weight: 700; line-height: 1.25;
     letter-spacing: -0.01em; max-width: 78%; margin-bottom: 1.1em;
@@ -408,6 +410,7 @@ const QUIZ_SCENE_HTML = `
         <div class="qz-deco">?</div>
         <div class="qz-rule qz-anim"></div>
         <div class="qz-eyebrow qz-anim" id="qz-eyebrow">Check your understanding</div>
+        <div class="qz-howto qz-anim" id="qz-howto"></div>
         <div class="qz-q qz-anim" id="qz-q"></div>
         <div class="qz-opts" id="qz-opts"></div>
         <div class="qz-foot">
@@ -485,6 +488,27 @@ window.__quizEngine = (function() {
     this_or_that: 'Quick fire \\u2014 this or that?',
     word_search: 'Find the words',
     guess_concept: 'Guess from the clues'
+  };
+  // One-line usage hint per type — overridable via quiz.instructions.
+  var HOWTO = {
+    multiple_choice: 'Pick the one right answer.',
+    true_false: 'Decide: is the statement true or false?',
+    multi_select: 'Select every answer that applies, then submit.',
+    fill_in: 'Type your answer and submit \\u2014 spelling is forgiving.',
+    hotspot: 'Click the right spot in the image.',
+    match: 'Drag each card on the right into the term it belongs to.',
+    ordering: 'Drag the cards into the correct order, then submit.',
+    sort_into: 'Drag each chip into its bucket \\u2014 click a placed chip to take it back.',
+    word_bank: 'Tap a word to fill the next gap; tap a filled gap to undo.',
+    scenario: 'Read the situation, then pick what you would actually do.',
+    likert: 'No wrong answers \\u2014 pick the position closest to yours.',
+    flashcard: 'Recall your answer first, tap the card to flip, then be honest.',
+    image_choice: 'Pick the image that answers the question.',
+    estimate: 'Drag the slider to your estimate, then submit.',
+    memory_pairs: 'Flip two cards at a time to find the matching pairs.',
+    this_or_that: 'Classify each statement as it appears \\u2014 quick instincts.',
+    word_search: 'Drag a straight line across each hidden word.',
+    guess_concept: 'Guess any time \\u2014 a wrong guess reveals the next clue.'
   };
   var LAYOUTS = {
     true_false: 'tf', fill_in: 'fi', hotspot: 'hs', match: 'match',
@@ -604,6 +628,7 @@ window.__quizEngine = (function() {
     }
     var q = function(sel) { return overlay.querySelector(sel); };
     q('#qz-eyebrow').textContent = cue.quiz.eyebrow || EYEBROWS[qtype];
+    q('#qz-howto').textContent = cue.quiz.instructions || HOWTO[qtype] || '';
     renderRich(q('#qz-q'), cue.quiz.question);
     // Long questions step down a size so dense layouts (match, sort, image
     // grids) keep their footer inside the frame.
@@ -1558,6 +1583,16 @@ window.__quizEngine = (function() {
         if (!im.complete) im.addEventListener('load', function() { autoFit(frameEl); });
       });
       setTimeout(function() { autoFit(frameEl); }, 350);
+      // Content that GROWS after open (revealed clues, correction lines,
+      // answer chips) must also stay in frame — refit on every DOM change.
+      if (overlay._qzObserver) overlay._qzObserver.disconnect();
+      var pending = false;
+      overlay._qzObserver = new MutationObserver(function() {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function() { pending = false; autoFit(frameEl); });
+      });
+      overlay._qzObserver.observe(frameEl, { childList: true, subtree: true });
       overlay.classList.add('visible');
       Array.prototype.forEach.call(anims, function(el, i) {
         setTimeout(function() { el.classList.add('in'); }, 380 + i * 110);
@@ -2045,6 +2080,8 @@ export interface ScormQuizCue {
     question: string;
     /** Overrides the type's default eyebrow label. */
     eyebrow?: string;
+    /** Overrides the type's default one-line usage hint. */
+    instructions?: string;
     /** hotspot only: the image that is the question canvas (URL or data URI). */
     image?: string;
     options: Array<{

@@ -44,6 +44,8 @@ export const QuizSpecSchema = z.object({
   type: QuizTypeSchema,
   question: z.string(),
   eyebrow: z.string().optional(),
+  /** Overrides the type's default one-line usage hint. */
+  instructions: z.string().optional(),
   bloomLevel: BloomLevelSchema.optional(),
   /** hotspot: the image that is the question canvas (URL or data URI). */
   image: z.string().optional(),
