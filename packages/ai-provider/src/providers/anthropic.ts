@@ -21,19 +21,20 @@ export class AnthropicProvider implements Provider {
 
   async chat(req: ChatRequest & { model: string }): Promise<ChatResponse> {
     const { system, messages } = splitSystem(req.messages);
-    const completion = await this.client.messages.create({
+    const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: req.model,
       system: req.jsonMode ? appendJsonInstruction(system) : system,
       messages,
       temperature: req.temperature,
       max_tokens: req.maxTokens ?? 4096,
       stop_sequences: req.stop,
-    });
+    };
+    const completion = await this.createWithTemperatureFallback(params);
     return shape(completion, req.model);
   }
 
   async vision(req: VisionRequest & { model: string }): Promise<ChatResponse> {
-    const completion = await this.client.messages.create({
+    const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: req.model,
       system: req.system,
       messages: [{
@@ -48,8 +49,28 @@ export class AnthropicProvider implements Provider {
       }],
       temperature: req.temperature,
       max_tokens: req.maxTokens ?? 2048,
-    });
+    };
+    const completion = await this.createWithTemperatureFallback(params);
     return shape(completion, req.model);
+  }
+
+  /** Newer Anthropic models reject `temperature` ("deprecated for this
+   *  model"). Retry once without it so profile temperature defaults never
+   *  brick a pipeline stage when a model is upgraded. */
+  private async createWithTemperatureFallback(
+    params: Anthropic.MessageCreateParamsNonStreaming,
+  ): Promise<Anthropic.Message> {
+    try {
+      return await this.client.messages.create(params);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (params.temperature !== undefined && /temperature/i.test(msg) && /(deprecated|not supported|unsupported)/i.test(msg)) {
+        const { temperature: _drop, ...rest } = params;
+        console.warn(`[anthropic] ${params.model} rejects temperature — retrying without it`);
+        return await this.client.messages.create(rest);
+      }
+      throw err;
+    }
   }
 }
 
