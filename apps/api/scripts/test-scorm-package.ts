@@ -71,6 +71,7 @@ async function main() {
     ["completion wired", html.includes("scorm.setStatus('completed')")],
     ["style palette survives round-trip", q?.style?.bg === "#F6F1E7" && q?.style?.accent === "#166534"],
     ["seamless scene (palette vars + frame fit)", html.includes("applyPalette(") && html.includes("fitSceneToVideo(") && html.includes("--q-bg")],
+    ["fullscreen owned by stage, not video", html.includes('controlslist="nofullscreen"') && html.includes("stage.requestFullscreen")],
   ];
   for (const [name, ok] of htmlChecks) {
     console.log(`3. player ${name}: ${ok ? "PASS" : "FAIL"}`);

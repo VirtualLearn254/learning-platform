@@ -62,7 +62,9 @@ async function main() {
     });
     try {
       const page = await browser.newPage();
-      await page.setViewport({ width: 1440, height: 810 });
+      // Deliberately NOT 16:9 — proves the scene bg paints the letterbox
+      // area edge-to-edge while content stays in the centered 16:9 frame.
+      await page.setViewport({ width: 1440, height: 900 });
       await page.goto(pathToFileURL(join(dir, "index.html")).href, { waitUntil: "load" });
       // Let the video start, then seek right up to the cue so timeupdate trips it.
       await page.waitForFunction("document.getElementById('v').readyState >= 2", { timeout: 15_000 });

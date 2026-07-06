@@ -113,21 +113,30 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     pointer-events: none;
   }
   .status.complete { color: #34D399; }
+  .fs-btn {
+    position: absolute; top: 14px; right: 18px; z-index: 5;
+    width: 38px; height: 38px; border: 0; border-radius: 8px; cursor: pointer;
+    background: rgba(0,0,0,0.45); color: rgba(255,255,255,0.75); font-size: 18px;
+    line-height: 1; display: flex; align-items: center; justify-content: center;
+  }
+  .fs-btn:hover { background: rgba(0,0,0,0.65); color: #fff; }
   /* ── Quiz scene ──────────────────────────────────────────────
-     Not a popup. A full-frame takeover positioned EXACTLY over the
-     video's 16:9 content box, rendered in the same palette CSS vars
-     the designer used for the beat — so it plays as the next
-     sub-scene of the video. Per-cue colors arrive as --q-* vars. */
+     Not a popup. A full-stage takeover in the same palette CSS vars
+     the designer used for the beat — the background paints edge to
+     edge (including any letterbox area) so it plays as the next
+     sub-scene of the video, while .qz-frame keeps the content laid
+     out in the centered 16:9 box to match the beats' proportions.
+     Per-cue colors arrive as --q-* vars. */
   .quiz-scene {
-    position: absolute; display: none; overflow: hidden;
+    position: absolute; inset: 0; display: none; overflow: hidden;
     background: var(--q-bg, #101418); color: var(--q-ink, #EEF2F5);
-    opacity: 0; transition: opacity 0.35s ease;
+    opacity: 0; transition: opacity 0.35s ease; z-index: 10;
     font-family: system-ui, "Helvetica Neue", Arial, sans-serif;
   }
   .quiz-scene.open { display: block; }
   .quiz-scene.visible { opacity: 1; }
   .qz-frame {
-    position: absolute; inset: 0;
+    position: absolute;
     display: flex; flex-direction: column; justify-content: center;
     padding: 4.2em 5em; box-sizing: border-box;
   }
@@ -179,10 +188,11 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
 <body>
   <div class="stage">
     <div class="title-badge">${title}</div>
-    <video id="v" src="master.mp4" controls autoplay preload="metadata" playsinline></video>
+    <video id="v" src="master.mp4" controls controlslist="nofullscreen" autoplay preload="metadata" playsinline></video>
+    <button class="fs-btn" id="fs" title="Fullscreen">&#x26F6;</button>
     <div class="status" id="status">connecting…</div>
     <div class="quiz-scene" id="qz">
-      <div class="qz-frame">
+      <div class="qz-frame" id="qz-frame">
         <div class="qz-deco">?</div>
         <div class="qz-rule qz-anim"></div>
         <div class="qz-eyebrow qz-anim">Check your understanding</div>
@@ -227,16 +237,40 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     var n = parseInt(m[1], 16);
     return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) < 140;
   }
+  // The scene background covers the whole stage; the content frame sits
+  // in the video's rendered 16:9 content box so layout proportions match
+  // the beats exactly.
+  var frame = document.getElementById('qz-frame');
   function fitSceneToVideo() {
     var W = video.clientWidth, H = video.clientHeight;
     var ar = (video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 16 / 9;
     var w = Math.min(W, H * ar), h = w / ar;
     var x = video.offsetLeft + (W - w) / 2, y = video.offsetTop + (H - h) / 2;
-    overlay.style.left = x + 'px'; overlay.style.top = y + 'px';
-    overlay.style.width = w + 'px'; overlay.style.height = h + 'px';
+    frame.style.left = x + 'px'; frame.style.top = y + 'px';
+    frame.style.width = w + 'px'; frame.style.height = h + 'px';
     overlay.style.fontSize = (w / 42) + 'px'; // em unit ≈ the beats' design scale
   }
   window.addEventListener('resize', function() {
+    if (overlay.classList.contains('open')) fitSceneToVideo();
+  });
+
+  // ── Fullscreen: always fullscreen the STAGE, never the video element.
+  // A fullscreened <video> renders nothing but itself, so the quiz scene
+  // would be invisible until the learner exits — the native fullscreen
+  // button is stripped (controlslist) and replaced with our own; any
+  // video-element fullscreen that slips through (Firefox ignores
+  // controlslist, double-click gestures) is redirected to the stage.
+  var stage = document.querySelector('.stage');
+  document.getElementById('fs').onclick = function() {
+    if (document.fullscreenElement) { document.exitFullscreen(); }
+    else if (stage.requestFullscreen) { stage.requestFullscreen(); }
+  };
+  document.addEventListener('fullscreenchange', function() {
+    if (document.fullscreenElement === video) {
+      document.exitFullscreen().then(function() {
+        if (stage.requestFullscreen) stage.requestFullscreen();
+      }).catch(function() {});
+    }
     if (overlay.classList.contains('open')) fitSceneToVideo();
   });
 
@@ -269,6 +303,11 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
   function showQuiz(cue, idx) {
     asked[idx] = true;
     video.pause();
+    // Last-resort guard: if the video element itself is fullscreen right
+    // now (Safari's native video fullscreen can't be stripped), pull out
+    // of it so the scene is actually visible when it opens.
+    if (document.fullscreenElement === video) document.exitFullscreen().catch(function() {});
+    if (video.webkitDisplayingFullscreen && video.webkitExitFullscreen) video.webkitExitFullscreen();
     applyPalette(cue.style);
     renderRich(document.getElementById('qz-q'), cue.quiz.question);
     var fb = document.getElementById('qz-fb');
