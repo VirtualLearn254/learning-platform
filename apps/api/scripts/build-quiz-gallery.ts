@@ -294,6 +294,49 @@ DEMOS.push(
     },
   },
   {
+    label: "memory pairs",
+    cue: {
+      atSec: 0, beatKey: "demo_mem",
+      quiz: {
+        type: "memory_pairs",
+        question: "Flip the cards and pair each law with its rule.",
+        options: [
+          { id: "p1", text: "Product law", matchTargetId: "p1r" },
+          { id: "p1r", text: "x^a · x^b = x^(a+b)" },
+          { id: "p2", text: "Quotient law", matchTargetId: "p2r" },
+          { id: "p2r", text: "x^a ÷ x^b = x^(a-b)" },
+          { id: "p3", text: "Zero exponent", matchTargetId: "p3r" },
+          { id: "p3r", text: "x^0 = 1" },
+          { id: "p4", text: "Negative exponent", matchTargetId: "p4r" },
+          { id: "p4r", text: "x^-n = 1/x^n" },
+        ],
+        correctFeedback: "Sharp memory",
+        wrongFeedback: "Pairs found",
+      },
+    },
+  },
+  {
+    label: "this or that",
+    cue: {
+      atSec: 0, beatKey: "demo_tot",
+      quiz: {
+        type: "this_or_that",
+        question: "Phishing or legit? Classify each email trait.",
+        options: [
+          { id: "phish", text: "Phishing" },
+          { id: "legit", text: "Legit" },
+          { id: "t1", text: "\"Verify your password within 24 hours or lose access\"", matchTargetId: "phish" },
+          { id: "t2", text: "Sender domain is micros0ft-helpdesk.ru", matchTargetId: "phish" },
+          { id: "t3", text: "Reply-to matches your company's domain exactly", matchTargetId: "legit" },
+          { id: "t4", text: "Generic greeting: \"Dear employee\"", matchTargetId: "phish" },
+          { id: "t5", text: "References a ticket number you actually opened", matchTargetId: "legit" },
+        ],
+        correctFeedback: "Perfect radar",
+        wrongFeedback: "Review the red dots",
+      },
+    },
+  },
+  {
     label: "estimate",
     cue: {
       atSec: 0, beatKey: "demo_est",

@@ -9,7 +9,8 @@ export type BloomLevel = "remember" | "understand" | "apply" | "analyze" | "eval
 export type QuizType =
   | "multiple_choice" | "match" | "fill_in" | "scenario" | "likert"
   | "true_false" | "multi_select" | "hotspot"
-  | "ordering" | "sort_into" | "word_bank" | "image_choice" | "estimate" | "flashcard";
+  | "ordering" | "sort_into" | "word_bank" | "image_choice" | "estimate" | "flashcard"
+  | "memory_pairs" | "this_or_that";
 
 export type BeatType = "hook" | "concept" | "example" | "check" | "recap";
 

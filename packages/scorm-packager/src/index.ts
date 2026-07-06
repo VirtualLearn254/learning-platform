@@ -187,20 +187,49 @@ const QUIZ_SCENE_CSS = `
     border: 0.14em dashed #10B981; border-radius: 0.3em;
     background: rgba(16,185,129,0.14);
   }
-  /* match: two columns, click a left card then its right partner */
-  .qz-opts.match { grid-template-columns: 1fr 1fr; column-gap: 2.2em; max-width: 82%; }
-  .qz-opt .badge {
-    margin-left: auto; min-width: 1.5em; height: 1.5em; border-radius: 50%;
-    background: var(--q-accent, #22D3EE); color: var(--q-btn-ink, #101418);
-    font-weight: 700; text-align: center; line-height: 1.5em; font-size: 0.85em;
-    display: none; flex: none;
+  /* ── Dragging (shared): pointer-based, mouse + touch ── */
+  .qz-drag { touch-action: none; }
+  .qz-drag.dragging {
+    opacity: 0.92; box-shadow: 0 0.5em 1.6em rgba(0,0,0,0.28);
+    transform: none !important; transition: none !important;
   }
+  .drop-hover { border-color: var(--q-accent, #22D3EE) !important; background: var(--q-accent-soft, rgba(34,211,238,0.12)) !important; }
+  .qz-placeholder { border: 1.5px dashed var(--q-line, rgba(0,0,0,0.2)); border-radius: 0.55em; background: transparent; }
+  /* match: term cards with drop slots + a pool of draggable answer cards */
+  .qz-opts.match { grid-template-columns: 1.05fr 1fr; column-gap: 1.8em; max-width: 86%; align-items: start; }
+  .qz-match-terms { display: flex; flex-direction: column; gap: 0.6em; }
+  .qz-match-term {
+    background: var(--q-surface, #171C22); border: 1.5px solid var(--q-line, rgba(0,0,0,0.14));
+    border-radius: 0.55em; padding: 0.7em 0.9em; font-size: 0.82em;
+  }
+  .qz-match-term .t { font-weight: 700; margin-bottom: 0.45em; display: block; }
+  .qz-match-term .t .k { color: var(--q-accent, #22D3EE); margin-right: 0.5em; }
+  .qz-match-slot {
+    border: 1.5px dashed var(--q-line, rgba(0,0,0,0.25)); border-radius: 0.45em;
+    min-height: 2.3em; display: flex; align-items: center; padding: 0.15em;
+    color: var(--q-muted, #8B98A5); font-size: 0.92em;
+  }
+  .qz-match-slot:empty::after { content: 'drop the rule here'; padding: 0 0.7em; opacity: 0.6; font-size: 0.82em; }
+  .qz-match-term.correct { border-color: #10B981; background: rgba(16,185,129,0.1); }
+  .qz-match-term.wrong { border-color: #EF4444; background: rgba(239,68,68,0.08); }
+  .qz-match-term .fix { display: block; margin-top: 0.4em; font-size: 0.8em; color: #10B981; font-weight: 700; }
+  .qz-match-pool { display: flex; flex-direction: column; gap: 0.6em; }
+  .qz-match-card {
+    background: var(--q-surface, #171C22); border: 1.5px solid var(--q-line, rgba(0,0,0,0.14));
+    border-radius: 0.45em; padding: 0.55em 0.9em; font-size: 0.78em; cursor: grab;
+    color: var(--q-ink, #EEF2F5); width: 100%; box-sizing: border-box;
+  }
+  .qz-match-card:hover { border-color: var(--q-accent, #22D3EE); }
+  /* ordering: draggable full-width cards, scenario-card outlook */
+  .qz-opts.ord { display: flex; flex-direction: column; gap: 0.55em; max-width: 64%; }
+  .qz-opts.ord .qz-opt { cursor: grab; }
+  .qz-opts.ord .qz-opt .k {
+    min-width: 1.6em; height: 1.6em; border-radius: 50%; flex: none;
+    background: var(--q-accent-soft, rgba(34,211,238,0.13)); color: var(--q-accent, #22D3EE);
+    text-align: center; line-height: 1.6em; margin-right: 0.3em;
+  }
+  .qz-opts.ord .qz-opt .grip { margin-left: auto; color: var(--q-muted, #8B98A5); opacity: 0.7; letter-spacing: 0.05em; flex: none; }
   .qz-opt { display: flex; align-items: center; gap: 0.5em; }
-  .qz-opt.badged .badge { display: inline-block; }
-  .qz-opt.correct .badge { background: #10B981; color: #fff; }
-  .qz-opt.wrong .badge { background: #EF4444; color: #fff; }
-  /* ordering: click cards in sequence, numbered badges appear */
-  .qz-opts.ord { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* sort_into: chips assigned to labelled buckets */
   .qz-opts.sort { display: flex; flex-direction: column; gap: 0.8em; }
   .qz-sort-items { display: flex; flex-wrap: wrap; gap: 0.55em; min-height: 2.4em; }
@@ -274,10 +303,40 @@ const QUIZ_SCENE_CSS = `
   .qz-fc-face.back { transform: rotateY(180deg); border-color: var(--q-accent, #22D3EE); }
   .qz-fc-hint { font-size: 0.6em; color: var(--q-muted, #8B98A5); letter-spacing: 0.14em; text-transform: uppercase; }
   .qz-fc-verdicts { display: flex; gap: 0.7em; margin-top: 1em; }
-  /* image_choice: picture cards with captions */
-  .qz-opts.img .qz-opt { flex-direction: column; align-items: stretch; padding: 0.55em; text-align: center; }
-  .qz-opts.img .qz-opt img { width: 100%; border-radius: 0.35em; display: block; margin-bottom: 0.45em; background: #fff; }
+  /* image_choice: picture cards with captions — column count adapts to the
+     option count (set inline by the engine) so nothing leaves the frame */
+  .qz-opts.img { max-width: 88%; }
+  .qz-opts.img .qz-opt { flex-direction: column; align-items: stretch; padding: 0.5em; text-align: center; font-size: 0.72em; }
+  .qz-opts.img .qz-opt img { width: 100%; max-height: 7.5em; object-fit: contain; border-radius: 0.35em; display: block; margin-bottom: 0.4em; background: #fff; }
   .qz-opts.img .qz-opt .k { display: none; }
+  /* memory_pairs: facedown card grid (Genially memory game) */
+  .qz-opts.mem { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 78%; }
+  .qz-mem-card {
+    min-height: 4.6em; border: 1.5px solid var(--q-line, rgba(0,0,0,0.14)); border-radius: 0.55em;
+    background: var(--q-surface, #171C22); color: var(--q-ink, #EEF2F5); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    padding: 0.5em; font-size: 0.74em; line-height: 1.3; font-family: inherit;
+    transition: border-color 0.18s ease, background 0.25s ease;
+  }
+  .qz-mem-card.down { color: var(--q-accent, #22D3EE); font-size: 1.4em; font-weight: 800; }
+  .qz-mem-card:hover:not(:disabled) { border-color: var(--q-accent, #22D3EE); }
+  .qz-mem-card.matched { border-color: #10B981; background: rgba(16,185,129,0.12); }
+  .qz-mem-card.miss { border-color: #EF4444; background: rgba(239,68,68,0.1); }
+  /* this_or_that: rapid-fire classification of one item at a time */
+  .qz-opts.tot { display: flex; flex-direction: column; gap: 0.9em; max-width: 66%; }
+  .qz-tot-dots { display: flex; gap: 0.4em; }
+  .qz-tot-dot { width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--q-line, rgba(0,0,0,0.2)); }
+  .qz-tot-dot.now { background: var(--q-accent, #22D3EE); }
+  .qz-tot-dot.right { background: #10B981; }
+  .qz-tot-dot.miss { background: #EF4444; }
+  .qz-tot-card {
+    background: var(--q-surface, #171C22); border: 1.5px solid var(--q-line, rgba(0,0,0,0.14));
+    border-radius: 0.7em; padding: 1.2em 1.3em; font-size: 1em; font-weight: 700;
+    min-height: 3.2em; display: flex; align-items: center; transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .qz-tot-card.flash-right { border-color: #10B981; background: rgba(16,185,129,0.12); }
+  .qz-tot-card.flash-wrong { border-color: #EF4444; background: rgba(239,68,68,0.1); }
+  .qz-tot-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7em; }
   /* estimate: slider between bounds, submit within tolerance */
   .qz-opts.est { display: block; max-width: 68%; }
   .qz-est-val { font-size: 1.5em; font-weight: 700; color: var(--q-accent, #22D3EE); margin-bottom: 0.5em; font-variant-numeric: tabular-nums; }
@@ -383,12 +442,15 @@ window.__quizEngine = (function() {
     likert: 'Where do you stand?',
     flashcard: 'Recall, then flip',
     image_choice: 'Pick the right image',
-    estimate: 'Make your estimate'
+    estimate: 'Make your estimate',
+    memory_pairs: 'Find the pairs',
+    this_or_that: 'Quick fire \\u2014 this or that?'
   };
   var LAYOUTS = {
     true_false: 'tf', fill_in: 'fi', hotspot: 'hs', match: 'match',
     ordering: 'ord', sort_into: 'sort', word_bank: 'wb', scenario: 'sc',
-    likert: 'lk', flashcard: 'fc', image_choice: 'img', estimate: 'est'
+    likert: 'lk', flashcard: 'fc', image_choice: 'img', estimate: 'est',
+    memory_pairs: 'mem', this_or_that: 'tot'
   };
   function normalize(s) { return String(s || '').toLowerCase().replace(/\\s+/g, ''); }
   // Deterministic pseudo-shuffle — stable across retakes so tests and
@@ -397,6 +459,90 @@ window.__quizEngine = (function() {
     var a = [], b = [];
     for (var i = 0; i < arr.length; i++) { (i % 2 === 0 ? a : b).push(arr[i]); }
     return b.concat(a.reverse());
+  }
+  // ── Pointer-based dragging (mouse + touch, no HTML5 DnD quirks) ──
+  // The element lifts under the pointer; drop targets highlight live via
+  // elementFromPoint; onDrop gets the target (or null → snap back).
+  function makeDraggable(el, getTargets, onDrop, canDrag) {
+    el.classList.add('qz-drag');
+    el.addEventListener('pointerdown', function(e) {
+      if (canDrag && !canDrag()) return;
+      e.preventDefault();
+      var r = el.getBoundingClientRect();
+      var ox = e.clientX - r.left, oy = e.clientY - r.top;
+      var parent = el.parentNode, next = el.nextSibling;
+      var hole = document.createElement('div');
+      hole.className = 'qz-placeholder';
+      hole.style.width = r.width + 'px';
+      hole.style.height = r.height + 'px';
+      parent.insertBefore(hole, el);
+      el.style.position = 'fixed'; el.style.zIndex = '60';
+      el.style.width = r.width + 'px'; el.style.margin = '0';
+      el.style.left = r.left + 'px'; el.style.top = r.top + 'px';
+      el.style.pointerEvents = 'none';
+      el.classList.add('dragging');
+      var over = null;
+      function findTarget(ev) {
+        var under = document.elementFromPoint(ev.clientX, ev.clientY);
+        var targets = getTargets();
+        for (var i = 0; i < targets.length; i++) {
+          if (targets[i] === under || targets[i].contains(under)) return targets[i];
+        }
+        return null;
+      }
+      function mv(ev) {
+        el.style.left = (ev.clientX - ox) + 'px';
+        el.style.top = (ev.clientY - oy) + 'px';
+        var t = findTarget(ev);
+        if (t !== over) {
+          if (over) over.classList.remove('drop-hover');
+          if (t) t.classList.add('drop-hover');
+          over = t;
+        }
+      }
+      function up(ev) {
+        document.removeEventListener('pointermove', mv);
+        document.removeEventListener('pointerup', up);
+        if (over) over.classList.remove('drop-hover');
+        el.classList.remove('dragging');
+        el.style.position = ''; el.style.zIndex = ''; el.style.width = '';
+        el.style.left = ''; el.style.top = ''; el.style.margin = '';
+        el.style.pointerEvents = '';
+        // Snap back into the hole by default; onDrop may re-home it.
+        parent.insertBefore(el, hole);
+        parent.removeChild(hole);
+        onDrop(findTarget(ev) || null, el);
+      }
+      document.addEventListener('pointermove', mv);
+      document.addEventListener('pointerup', up);
+    });
+  }
+  // Dense content (image grids, many cards) steps the whole frame down
+  // until it fits — nothing may leave the viewport. Measures the actual
+  // content children (the decorative numeral bleeds off-frame by design
+  // and must not count).
+  function autoFit(frame) {
+    function overflows() {
+      var fr = frame.getBoundingClientRect();
+      var pad = parseFloat(getComputedStyle(frame).paddingBottom) || 0;
+      var limit = fr.bottom - pad * 0.5;
+      var kids = frame.children;
+      for (var i = 0; i < kids.length; i++) {
+        if ((kids[i].className || '').indexOf('qz-deco') >= 0) continue;
+        var kb = kids[i].getBoundingClientRect();
+        if (kb.bottom > limit + 2 || kb.top < fr.top - 2) return true;
+      }
+      return false;
+    }
+    if (!frame.style.fontSize) {
+      // fresh render — start from full size
+      frame.style.fontSize = '';
+    }
+    var scale = parseFloat(frame.style.fontSize) || 1;
+    while (scale > 0.6 && overflows()) {
+      scale -= 0.06;
+      frame.style.fontSize = scale + 'em';
+    }
   }
 
   function render(cue, ctx) {
@@ -423,6 +569,13 @@ window.__quizEngine = (function() {
     var box = q('#qz-opts');
     box.className = 'qz-opts' + (LAYOUTS[qtype] ? ' ' + LAYOUTS[qtype] : '');
     box.innerHTML = '';
+    box.removeAttribute('style');
+    // image_choice: column count adapts to how many pictures there are,
+    // so the grid never grows past the frame.
+    if (qtype === 'image_choice') {
+      var nImg = (cue.quiz.options || []).length;
+      box.style.gridTemplateColumns = 'repeat(' + Math.min(4, Math.max(2, nImg)) + ', minmax(0, 1fr))';
+    }
     var answered = false;
     var selected = {};
     var letters = 'ABCDEFGH';
@@ -554,101 +707,140 @@ window.__quizEngine = (function() {
       });
     }
     else if (qtype === 'match') {
-      // Genially "Match them up": lefts carry matchTargetId; rights are the
-      // options those ids point at. Click a left card, then its partner.
+      // "Match them up", drag edition: each term card has a drop slot;
+      // answer cards live in a pool and are dragged into slots. Dropping
+      // onto an occupied slot swaps the old answer back to the pool.
       var mOpts = cue.quiz.options || [];
       var lefts = mOpts.filter(function(o) { return o.matchTargetId; });
       var rights = mOpts.filter(function(o) { return !o.matchTargetId && lefts.some(function(l) { return l.matchTargetId === o.id; }); });
-      var rOrder = pseudoShuffle(rights);
-      var assign = {};       // left index -> right option id
-      var selLeft = -1;
-      var leftEls = [], rightEls = [];
-      function refreshBadges() {
-        leftEls.forEach(function(el, li) {
-          var rid = assign[li];
-          var n = '';
-          rOrder.forEach(function(r, ri) { if (r.id === rid) n = String(ri + 1); });
-          el.querySelector('.badge').textContent = n;
-          el.classList.toggle('badged', !!n);
-        });
-        var all = lefts.every(function(_, li) { return assign[li]; });
+      var terms = document.createElement('div');
+      terms.className = 'qz-match-terms qz-anim';
+      var pool = document.createElement('div');
+      pool.className = 'qz-match-pool qz-anim';
+      var termEls = [], slotEls2 = [];
+      var slotOf = {};       // right option id -> slot index (or -1 = pool)
+      function checkMatched() {
+        var all = slotEls2.every(function(s) { return s.children.length > 0; });
         submit.classList.toggle('show', all && !answered);
       }
-      var mRows = Math.max(lefts.length, rOrder.length);
-      for (var mr = 0; mr < mRows; mr++) {
-        (function(r) {
-          if (lefts[r]) {
-            var le = makeCard(lefts[r], letters.charAt(r));
-            le.onclick = function() {
-              if (answered) return;
-              selLeft = r;
-              leftEls.forEach(function(el) { el.classList.remove('sel'); });
-              le.classList.add('sel');
-            };
-            leftEls[r] = le;
-            box.appendChild(le);
-          } else { box.appendChild(document.createElement('span')); }
-          if (rOrder[r]) {
-            var re = makeCard(rOrder[r], String(r + 1));
-            re.onclick = function() {
-              if (answered || selLeft < 0) return;
-              // A right can only partner one left — steal it if reused.
-              Object.keys(assign).forEach(function(li) { if (assign[li] === rOrder[r].id) delete assign[li]; });
-              assign[selLeft] = rOrder[r].id;
-              leftEls.forEach(function(el) { el.classList.remove('sel'); });
-              selLeft = -1;
-              refreshBadges();
-            };
-            rightEls[r] = re;
-            box.appendChild(re);
-          } else { box.appendChild(document.createElement('span')); }
-        })(mr);
-      }
+      lefts.forEach(function(l, li) {
+        var term = document.createElement('div');
+        term.className = 'qz-match-term';
+        var t = document.createElement('span');
+        t.className = 't';
+        var k = document.createElement('span');
+        k.className = 'k';
+        k.textContent = letters.charAt(li);
+        t.appendChild(k);
+        var tt = document.createElement('span');
+        renderRich(tt, l.text);
+        t.appendChild(tt);
+        var slot = document.createElement('div');
+        slot.className = 'qz-match-slot';
+        term.appendChild(t);
+        term.appendChild(slot);
+        termEls[li] = term;
+        slotEls2[li] = slot;
+        terms.appendChild(term);
+      });
+      pseudoShuffle(rights).forEach(function(r) {
+        var card = document.createElement('div');
+        card.className = 'qz-match-card';
+        renderRich(card, r.text);
+        card.dataset.rid = r.id;
+        slotOf[r.id] = -1;
+        pool.appendChild(card);
+        makeDraggable(card,
+          function() { return slotEls2.concat([pool]); },
+          function(target) {
+            if (!target) { checkMatched(); return; }
+            if (target === pool) { pool.appendChild(card); slotOf[r.id] = -1; checkMatched(); return; }
+            var si = slotEls2.indexOf(target);
+            // Occupied slot: evict the current tenant back to the pool.
+            if (target.children.length) {
+              var old = target.children[0];
+              slotOf[old.dataset.rid] = -1;
+              pool.appendChild(old);
+            }
+            target.appendChild(card);
+            slotOf[r.id] = si;
+            checkMatched();
+          },
+          function() { return !answered; });
+      });
+      box.appendChild(terms);
+      box.appendChild(pool);
       submit.onclick = function() {
         if (answered) return;
         var right = true;
-        leftEls.forEach(function(el, li) {
-          var ok = assign[li] === lefts[li].matchTargetId;
-          el.classList.add(ok ? 'correct' : 'wrong');
-          if (!ok) right = false;
+        lefts.forEach(function(l, li) {
+          var tenant = slotEls2[li].children[0];
+          var ok = tenant && tenant.dataset.rid === l.matchTargetId;
+          termEls[li].classList.add(ok ? 'correct' : 'wrong');
+          if (!ok) {
+            right = false;
+            var correctR = rights.filter(function(r) { return r.id === l.matchTargetId; })[0];
+            if (correctR) {
+              var fix = document.createElement('span');
+              fix.className = 'fix';
+              renderRich(fix, '\\u2713 ' + correctR.text);
+              termEls[li].appendChild(fix);
+            }
+          }
         });
         settle(right, right
           ? (cue.quiz.correctFeedback || 'All matched \\u2014 well done.')
-          : (cue.quiz.wrongFeedback || 'Some pairs are off \\u2014 the red cards are mismatched.'));
+          : (cue.quiz.wrongFeedback || 'The red cards are mismatched \\u2014 corrections shown.'));
       };
     }
     else if (qtype === 'ordering') {
-      // Click cards in sequence; numbered badges appear. Authored options
-      // order IS the correct order; display order is shuffled.
+      // Drag the cards into order (scenario-card outlook, live position
+      // chips). Authored options order IS the correct order; the display
+      // starts shuffled. Dropping onto another card takes its place.
       var oOpts = cue.quiz.options || [];
-      var seq = [];          // clicked option indices, in click order
-      var dispO = pseudoShuffle(oOpts.map(function(_, i) { return i; }));
-      var ordEls = {};
       function refreshOrd() {
-        Object.keys(ordEls).forEach(function(oi) {
-          var pos = seq.indexOf(Number(oi));
-          ordEls[oi].querySelector('.badge').textContent = pos >= 0 ? String(pos + 1) : '';
-          ordEls[oi].classList.toggle('badged', pos >= 0);
+        Array.prototype.forEach.call(box.children, function(el, p) {
+          el.querySelector('.k').textContent = String(p + 1);
         });
-        submit.classList.toggle('show', seq.length === oOpts.length && !answered);
       }
-      dispO.forEach(function(oi) {
-        var el = makeCard(oOpts[oi], '');
-        el.querySelector('.k').style.display = 'none';
-        el.onclick = function() {
-          if (answered) return;
-          var pos = seq.indexOf(oi);
-          if (pos >= 0) seq.splice(pos);       // undo from that point on
-          else seq.push(oi);
-          refreshOrd();
-        };
-        ordEls[oi] = el;
+      pseudoShuffle(oOpts.map(function(_, i) { return i; })).forEach(function(oi) {
+        var el = document.createElement('div');
+        el.className = 'qz-opt qz-anim';
+        el.dataset.oi = String(oi);
+        var k = document.createElement('span');
+        k.className = 'k';
+        var body = document.createElement('span');
+        renderRich(body, oOpts[oi].text);
+        var grip = document.createElement('span');
+        grip.className = 'grip';
+        grip.innerHTML = '&#8942;&#8942;';
+        el.appendChild(k);
+        el.appendChild(body);
+        el.appendChild(grip);
+        makeDraggable(el,
+          function() { return Array.prototype.filter.call(box.children, function(c) { return c !== el; }); },
+          function(target) {
+            if (target) {
+              // Land where the target sits; it shifts to make room.
+              var kids = Array.prototype.slice.call(box.children);
+              if (kids.indexOf(el) < kids.indexOf(target)) box.insertBefore(el, target.nextSibling);
+              else box.insertBefore(el, target);
+            }
+            refreshOrd();
+          },
+          function() { return !answered; });
         box.appendChild(el);
       });
+      refreshOrd();
+      submit.classList.add('show');
       submit.onclick = function() {
         if (answered) return;
-        var right = seq.every(function(oi, p) { return oi === p; });
-        seq.forEach(function(oi, p) { ordEls[oi].classList.add(oi === p ? 'correct' : 'wrong'); });
+        var right = true;
+        Array.prototype.forEach.call(box.children, function(el, p) {
+          var ok = Number(el.dataset.oi) === p;
+          el.classList.add(ok ? 'correct' : 'wrong');
+          if (!ok) right = false;
+        });
         var correctOrder = oOpts.map(function(o) { return o.text; }).join('  \\u2192  ');
         settle(right, right
           ? (cue.quiz.correctFeedback || 'Perfect sequence.')
@@ -669,6 +861,12 @@ window.__quizEngine = (function() {
       var bucketsGrid = document.createElement('div');
       bucketsGrid.className = 'qz-buckets qz-anim';
       if (buckets.length > 2) bucketsGrid.style.gridTemplateColumns = 'repeat(' + buckets.length + ', minmax(0, 1fr))';
+      var bucketEls = [];
+      function checkAllPlaced() {
+        submit.classList.toggle('show', items.every(function(_, ii) { return placed[ii]; }) && !answered);
+      }
+      // Chips DRAG into buckets (or back to the tray); click-select-then-
+      // click-bucket still works as a fallback.
       pseudoShuffle(items.map(function(_, i) { return i; })).forEach(function(ii) {
         var c = makeChip(items[ii].text);
         c.classList.remove('qz-anim');
@@ -679,13 +877,25 @@ window.__quizEngine = (function() {
           itemEls.forEach(function(el) { el.classList.remove('sel'); });
           c.classList.add('sel');
         };
+        makeDraggable(c,
+          function() { return bucketEls.concat([itemsRow]); },
+          function(target) {
+            if (!target) return;
+            c.classList.remove('sel');
+            if (target === itemsRow) { delete placed[ii]; itemsRow.appendChild(c); }
+            else {
+              var bi = bucketEls.indexOf(target);
+              placed[ii] = buckets[bi].id;
+              target.appendChild(c);
+            }
+            selItem = -1;
+            checkAllPlaced();
+          },
+          function() { return !answered; });
         itemEls[ii] = c;
         itemsRow.appendChild(c);
       });
-      function checkAllPlaced() {
-        submit.classList.toggle('show', items.every(function(_, ii) { return placed[ii]; }) && !answered);
-      }
-      buckets.forEach(function(bk) {
+      buckets.forEach(function(bk, bi) {
         var bx = document.createElement('div');
         bx.className = 'qz-bucket';
         var bh = document.createElement('div');
@@ -700,6 +910,7 @@ window.__quizEngine = (function() {
           selItem = -1;
           checkAllPlaced();
         };
+        bucketEls[bi] = bx;
         bucketsGrid.appendChild(bx);
       });
       box.appendChild(itemsRow);
@@ -917,6 +1128,120 @@ window.__quizEngine = (function() {
           : (cue.quiz.wrongFeedback || 'The actual value is revealed below the slider.')));
       };
     }
+    else if (qtype === 'memory_pairs') {
+      // Genially memory game: facedown cards, flip two, pairs stay open.
+      // Pairs via matchTargetId (card A points at its partner B's id).
+      var pOpts = cue.quiz.options || [];
+      var flipped = [];      // currently face-up unmatched card elements
+      var matchedCount = 0;
+      var misses = 0;
+      var totalPairs = pOpts.filter(function(o) { return o.matchTargetId; }).length;
+      function partnerOf(a, b) {
+        return a.matchTargetId === b.id || b.matchTargetId === a.id;
+      }
+      var lock = false;
+      pseudoShuffle(pOpts).forEach(function(opt) {
+        var card = document.createElement('button');
+        card.className = 'qz-mem-card qz-anim down';
+        card.textContent = '?';
+        card._opt = opt;
+        card.onclick = function() {
+          if (answered || lock || !card.classList.contains('down')) return;
+          card.classList.remove('down');
+          renderRich(card, opt.text);
+          flipped.push(card);
+          if (flipped.length < 2) return;
+          var a = flipped[0], b2 = flipped[1];
+          flipped = [];
+          if (partnerOf(a._opt, b2._opt)) {
+            a.classList.add('matched');
+            b2.classList.add('matched');
+            matchedCount++;
+            if (matchedCount === totalPairs) {
+              var right = misses <= totalPairs;   // generous: ~1 miss per pair
+              settle(right, (right
+                ? (cue.quiz.correctFeedback || 'All pairs found')
+                : (cue.quiz.wrongFeedback || 'All pairs found, but it took some digging'))
+                + ' \\u2014 ' + misses + ' miss' + (misses === 1 ? '' : 'es') + '.');
+            }
+          } else {
+            misses++;
+            lock = true;
+            a.classList.add('miss');
+            b2.classList.add('miss');
+            setTimeout(function() {
+              a.classList.remove('miss');
+              b2.classList.remove('miss');
+              a.classList.add('down'); a.textContent = '?';
+              b2.classList.add('down'); b2.textContent = '?';
+              lock = false;
+            }, 750);
+          }
+        };
+        box.appendChild(card);
+      });
+    }
+    else if (qtype === 'this_or_that') {
+      // Quick-fire classification: one statement at a time, two verdicts.
+      // Same schema as sort_into: 2 buckets (no matchTargetId) + items.
+      var tOpts = cue.quiz.options || [];
+      var tBuckets = tOpts.filter(function(o) { return !o.matchTargetId; });
+      var tItems = pseudoShuffle(tOpts.filter(function(o) { return o.matchTargetId; }));
+      var tIdx = 0, tRight = 0;
+      var dots = document.createElement('div');
+      dots.className = 'qz-tot-dots qz-anim';
+      var dotEls = tItems.map(function() {
+        var d = document.createElement('span');
+        d.className = 'qz-tot-dot';
+        dots.appendChild(d);
+        return d;
+      });
+      var tCard = document.createElement('div');
+      tCard.className = 'qz-tot-card qz-anim';
+      var btns = document.createElement('div');
+      btns.className = 'qz-tot-btns qz-anim';
+      function showItem() {
+        dotEls.forEach(function(d, i) { d.classList.toggle('now', i === tIdx); });
+        renderRich(tCard, tItems[tIdx].text);
+      }
+      var tLock = false;
+      tBuckets.forEach(function(bk) {
+        var b = document.createElement('button');
+        b.className = 'qz-opt';
+        b.style.textAlign = 'center';
+        b.style.fontWeight = '700';
+        var sp = document.createElement('span');
+        renderRich(sp, bk.text);
+        b.appendChild(sp);
+        b.onclick = function() {
+          if (answered || tLock) return;
+          tLock = true;
+          var it = tItems[tIdx];
+          var ok = it.matchTargetId === bk.id;
+          if (ok) tRight++;
+          dotEls[tIdx].classList.remove('now');
+          dotEls[tIdx].classList.add(ok ? 'right' : 'miss');
+          tCard.classList.add(ok ? 'flash-right' : 'flash-wrong');
+          setTimeout(function() {
+            tCard.classList.remove('flash-right');
+            tCard.classList.remove('flash-wrong');
+            tIdx++;
+            tLock = false;
+            if (tIdx < tItems.length) { showItem(); return; }
+            var right = tRight === tItems.length;
+            settle(right, (right
+              ? (cue.quiz.correctFeedback || 'Perfect round')
+              : (cue.quiz.wrongFeedback || 'Check the red dots'))
+              + ' \\u2014 ' + tRight + ' of ' + tItems.length + '.');
+          }, 650);
+        };
+        btns.appendChild(b);
+      });
+      box.appendChild(dots);
+      box.appendChild(tCard);
+      box.appendChild(btns);
+      showItem();
+    }
     else {
       // multiple_choice / true_false / multi_select / image_choice share one
       // card list; image_choice options additionally carry opt.image.
@@ -988,6 +1313,15 @@ window.__quizEngine = (function() {
     var anims = overlay.querySelectorAll('.qz-anim');
     Array.prototype.forEach.call(anims, function(el) { el.classList.remove('in'); });
     requestAnimationFrame(function() {
+      var frameEl = overlay.querySelector('.qz-frame');
+      frameEl.style.fontSize = '';   // fresh render starts at full scale
+      autoFit(frameEl);
+      // Images (hotspot canvases, picture options) settle their size late —
+      // re-fit as each one loads so nothing ever leaves the frame.
+      Array.prototype.forEach.call(box.querySelectorAll('img'), function(im) {
+        if (!im.complete) im.addEventListener('load', function() { autoFit(frameEl); });
+      });
+      setTimeout(function() { autoFit(frameEl); }, 350);
       overlay.classList.add('visible');
       Array.prototype.forEach.call(anims, function(el, i) {
         setTimeout(function() { el.classList.add('in'); }, 380 + i * 110);
