@@ -395,6 +395,10 @@ const QUIZ_SCENE_CSS = `
     font-family: inherit; display: none; white-space: nowrap;
   }
   .qz-go.show { display: inline-block; }
+  /* Skin-proof visibility: Submit/Continue show/hide is ENGINE state.
+     Skins may restyle the shown button (including its display mode) but
+     can never force a hidden one visible. */
+  .qz-go:not(.show) { display: none !important; }
   /* After settling, every custom interactive surface goes inert. */
   .qz-opts.settled, .qz-opts.settled * { pointer-events: none; cursor: default; }
   /* Staggered entrance — each element rises in like a designed reveal.
@@ -1942,6 +1946,7 @@ export function lintQuizSkin(css: string): { ok: boolean; errors: string[] } {
   if (/@import|url\s*\(\s*['"]?\s*http/i.test(css)) errors.push("external resources (@import / http url()) not allowed — fonts must be system stacks or data URIs");
   const forbidden: Array<[RegExp, string]> = [
     [/display\s*:\s*none/i, "display:none (hides engine elements)"],
+    [/display\s*:[^;}]*!important/i, "display with !important (overrides engine show/hide state)"],
     [/visibility\s*:\s*hidden/i, "visibility:hidden"],
     [/pointer-events\s*:/i, "pointer-events (breaks interactions)"],
     [/position\s*:\s*(fixed|sticky)/i, "position:fixed/sticky (breaks the drag ghost)"],
