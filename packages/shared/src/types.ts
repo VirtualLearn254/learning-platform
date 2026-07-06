@@ -10,7 +10,7 @@ export type QuizType =
   | "multiple_choice" | "match" | "fill_in" | "scenario" | "likert"
   | "true_false" | "multi_select" | "hotspot"
   | "ordering" | "sort_into" | "word_bank" | "image_choice" | "estimate" | "flashcard"
-  | "memory_pairs" | "this_or_that";
+  | "memory_pairs" | "this_or_that" | "word_search" | "guess_concept";
 
 export type BeatType = "hook" | "concept" | "example" | "check" | "recap";
 

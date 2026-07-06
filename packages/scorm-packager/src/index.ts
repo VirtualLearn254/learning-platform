@@ -337,6 +337,41 @@ const QUIZ_SCENE_CSS = `
   .qz-tot-card.flash-right { border-color: #10B981; background: rgba(16,185,129,0.12); }
   .qz-tot-card.flash-wrong { border-color: #EF4444; background: rgba(239,68,68,0.1); }
   .qz-tot-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7em; }
+  /* word_search: letter grid + word chips (Genially Word Search) */
+  .qz-opts.ws { display: flex; gap: 1.6em; max-width: 88%; align-items: flex-start; }
+  .qz-ws-grid { display: grid; gap: 0.14em; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .qz-ws-cell {
+    width: 1.55em; height: 1.55em; display: flex; align-items: center; justify-content: center;
+    background: var(--q-surface, #171C22); border: 1px solid var(--q-line, rgba(0,0,0,0.12));
+    border-radius: 0.2em; font-weight: 700; font-size: 0.72em; cursor: pointer;
+    color: var(--q-ink, #EEF2F5);
+  }
+  .qz-ws-cell.path { background: var(--q-accent-soft, rgba(34,211,238,0.15)); border-color: var(--q-accent, #22D3EE); }
+  .qz-ws-cell.found { background: rgba(16,185,129,0.18); border-color: #10B981; color: #10B981; }
+  .qz-ws-cell.no { background: rgba(239,68,68,0.16); border-color: #EF4444; }
+  .qz-ws-words { display: flex; flex-direction: column; gap: 0.5em; }
+  .qz-ws-word {
+    font-size: 0.74em; padding: 0.45em 1em; border: 1.5px solid var(--q-line, rgba(0,0,0,0.14));
+    border-radius: 2em; background: var(--q-surface, #171C22); color: var(--q-ink, #EEF2F5);
+    letter-spacing: 0.08em;
+  }
+  .qz-ws-word.got { border-color: #10B981; color: #10B981; text-decoration: line-through; }
+  /* guess_concept: progressive clue cards + a guess input (Genially
+     Guess the Character) */
+  .qz-opts.gc { display: flex; flex-direction: column; gap: 0.6em; max-width: 72%; }
+  .qz-gc-hint {
+    background: var(--q-surface, #171C22); border: 1.5px solid var(--q-line, rgba(0,0,0,0.14));
+    border-left: 0.35em solid var(--q-accent, #22D3EE); border-radius: 0.5em;
+    padding: 0.65em 1em; font-size: 0.78em; font-style: italic; line-height: 1.45;
+    color: var(--q-ink, #EEF2F5);
+  }
+  .qz-gc-more {
+    align-self: flex-start; background: none; border: 1.5px dashed var(--q-line, rgba(0,0,0,0.25));
+    color: var(--q-muted, #8B98A5); border-radius: 2em; padding: 0.5em 1.1em;
+    font-size: 0.7em; cursor: pointer; font-family: inherit;
+  }
+  .qz-gc-more:hover { border-color: var(--q-accent, #22D3EE); color: var(--q-accent, #22D3EE); }
+  .qz-gc-row { display: flex; gap: 0.8em; align-items: center; margin-top: 0.3em; }
   /* estimate: slider between bounds, submit within tolerance */
   .qz-opts.est { display: block; max-width: 68%; }
   .qz-est-val { font-size: 1.5em; font-weight: 700; color: var(--q-accent, #22D3EE); margin-bottom: 0.5em; font-variant-numeric: tabular-nums; }
@@ -360,9 +395,12 @@ const QUIZ_SCENE_CSS = `
   .qz-go.show { display: inline-block; }
   /* After settling, every custom interactive surface goes inert. */
   .qz-opts.settled, .qz-opts.settled * { pointer-events: none; cursor: default; }
-  /* Staggered entrance — each element rises in like a designed reveal. */
+  /* Staggered entrance — each element rises in like a designed reveal.
+     The settled state must be transform:NONE (not translateY(0)) — a live
+     transform would make ancestors the containing block for the fixed-
+     position drag ghost, pulling it away from the cursor. */
   .qz-anim { opacity: 0; transform: translateY(0.8em); transition: opacity 0.45s ease, transform 0.45s ease; }
-  .qz-anim.in { opacity: 1; transform: translateY(0); }
+  .qz-anim.in { opacity: 1; transform: none; }
 `;
 
 const QUIZ_SCENE_HTML = `
@@ -444,13 +482,15 @@ window.__quizEngine = (function() {
     image_choice: 'Pick the right image',
     estimate: 'Make your estimate',
     memory_pairs: 'Find the pairs',
-    this_or_that: 'Quick fire \\u2014 this or that?'
+    this_or_that: 'Quick fire \\u2014 this or that?',
+    word_search: 'Find the words',
+    guess_concept: 'Guess from the clues'
   };
   var LAYOUTS = {
     true_false: 'tf', fill_in: 'fi', hotspot: 'hs', match: 'match',
     ordering: 'ord', sort_into: 'sort', word_bank: 'wb', scenario: 'sc',
     likert: 'lk', flashcard: 'fc', image_choice: 'img', estimate: 'est',
-    memory_pairs: 'mem', this_or_that: 'tot'
+    memory_pairs: 'mem', this_or_that: 'tot', word_search: 'ws', guess_concept: 'gc'
   };
   function normalize(s) { return String(s || '').toLowerCase().replace(/\\s+/g, ''); }
   // Deterministic pseudo-shuffle — stable across retakes so tests and
@@ -470,15 +510,24 @@ window.__quizEngine = (function() {
       e.preventDefault();
       var r = el.getBoundingClientRect();
       var ox = e.clientX - r.left, oy = e.clientY - r.top;
-      var parent = el.parentNode, next = el.nextSibling;
+      var parent = el.parentNode;
       var hole = document.createElement('div');
       hole.className = 'qz-placeholder';
       hole.style.width = r.width + 'px';
       hole.style.height = r.height + 'px';
       parent.insertBefore(hole, el);
+      // CRITICAL: any transformed ancestor (the entrance animation's
+      // translateY) becomes the containing block for position:fixed and
+      // the element drifts away from the cursor. Re-home the element to
+      // the scene root (which has the palette vars) for the drag, and pin
+      // its computed font-size so the em scale survives the move.
+      var host = (el.closest && el.closest('.quiz-scene')) || document.body;
+      var fs = getComputedStyle(el).fontSize;
+      host.appendChild(el);
       el.style.position = 'fixed'; el.style.zIndex = '60';
       el.style.width = r.width + 'px'; el.style.margin = '0';
       el.style.left = r.left + 'px'; el.style.top = r.top + 'px';
+      el.style.fontSize = fs;
       el.style.pointerEvents = 'none';
       el.classList.add('dragging');
       var over = null;
@@ -507,7 +556,7 @@ window.__quizEngine = (function() {
         el.classList.remove('dragging');
         el.style.position = ''; el.style.zIndex = ''; el.style.width = '';
         el.style.left = ''; el.style.top = ''; el.style.margin = '';
-        el.style.pointerEvents = '';
+        el.style.pointerEvents = ''; el.style.fontSize = '';
         // Snap back into the hole by default; onDrop may re-home it.
         parent.insertBefore(el, hole);
         parent.removeChild(hole);
@@ -1241,6 +1290,193 @@ window.__quizEngine = (function() {
       box.appendChild(tCard);
       box.appendChild(btns);
       showItem();
+    }
+    else if (qtype === 'word_search') {
+      // Genially Word Search: seeded letter grid; drag a straight line
+      // across a word to claim it. Words = options with isCorrect.
+      var wsWords = (cue.quiz.options || []).filter(function(o) { return o.isCorrect; })
+        .map(function(o) { return String(o.text || '').toUpperCase().replace(/[^A-Z]/g, ''); })
+        .filter(function(w) { return w.length >= 2; });
+      var longest = wsWords.reduce(function(m, w) { return Math.max(m, w.length); }, 0);
+      var N = Math.max(8, Math.min(12, longest + 2));
+      var seed = 7;
+      wsWords.join('').split('').forEach(function(ch) { seed = (seed * 31 + ch.charCodeAt(0)) >>> 0; });
+      function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+      var gridL = [];
+      for (var gi = 0; gi < N * N; gi++) gridL.push('');
+      var dirs = [[1, 0], [0, 1], [1, 1]];
+      wsWords.slice().sort(function(a, b2) { return b2.length - a.length; }).forEach(function(w) {
+        for (var att = 0; att < 300; att++) {
+          var d = dirs[Math.floor(rnd() * dirs.length)];
+          var maxR = N - (d[1] ? w.length : 1), maxC = N - (d[0] ? w.length : 1);
+          var r0 = Math.floor(rnd() * (maxR + 1)), c0 = Math.floor(rnd() * (maxC + 1));
+          var ok = true;
+          for (var li = 0; li < w.length; li++) {
+            var cell = gridL[(r0 + d[1] * li) * N + (c0 + d[0] * li)];
+            if (cell && cell !== w.charAt(li)) { ok = false; break; }
+          }
+          if (ok) {
+            for (var lj = 0; lj < w.length; lj++) gridL[(r0 + d[1] * lj) * N + (c0 + d[0] * lj)] = w.charAt(lj);
+            break;
+          }
+        }
+      });
+      for (var gf = 0; gf < N * N; gf++) if (!gridL[gf]) gridL[gf] = String.fromCharCode(65 + Math.floor(rnd() * 26));
+      var gridEl = document.createElement('div');
+      gridEl.className = 'qz-ws-grid qz-anim';
+      gridEl.style.gridTemplateColumns = 'repeat(' + N + ', auto)';
+      var cellEls = gridL.map(function(ch, ci) {
+        var c = document.createElement('div');
+        c.className = 'qz-ws-cell';
+        c.textContent = ch;
+        c.dataset.i = String(ci);
+        gridEl.appendChild(c);
+        return c;
+      });
+      var wordsCol = document.createElement('div');
+      wordsCol.className = 'qz-ws-words qz-anim';
+      var wordEls = {};
+      wsWords.forEach(function(w) {
+        var wc = document.createElement('div');
+        wc.className = 'qz-ws-word';
+        wc.textContent = w;
+        wordEls[w] = wc;
+        wordsCol.appendChild(wc);
+      });
+      var foundWords = {};
+      var wsMisses = 0;
+      var start = -1, path = [];
+      function cellAt(ev) {
+        var gr = gridEl.getBoundingClientRect();
+        var cw = gr.width / N, chh = gr.height / N;
+        var col = Math.floor((ev.clientX - gr.left) / cw), row = Math.floor((ev.clientY - gr.top) / chh);
+        if (col < 0 || col >= N || row < 0 || row >= N) return -1;
+        return row * N + col;
+      }
+      function linePath(a, b2) {
+        var r1 = Math.floor(a / N), c1 = a % N, r2 = Math.floor(b2 / N), c2 = b2 % N;
+        var dr = r2 - r1, dc = c2 - c1;
+        if (dr !== 0 && dc !== 0 && Math.abs(dr) !== Math.abs(dc)) return null;
+        var len = Math.max(Math.abs(dr), Math.abs(dc));
+        var sr = dr === 0 ? 0 : dr / Math.abs(dr), sc = dc === 0 ? 0 : dc / Math.abs(dc);
+        var out = [];
+        for (var i = 0; i <= len; i++) out.push((r1 + sr * i) * N + (c1 + sc * i));
+        return out;
+      }
+      function paint(newPath) {
+        path.forEach(function(ci) { cellEls[ci].classList.remove('path'); });
+        path = newPath || [];
+        path.forEach(function(ci) { cellEls[ci].classList.add('path'); });
+      }
+      gridEl.addEventListener('pointerdown', function(e) {
+        if (answered) return;
+        e.preventDefault();
+        start = cellAt(e);
+        if (start >= 0) paint([start]);
+        function mv(ev) {
+          var cur = cellAt(ev);
+          if (cur >= 0 && start >= 0) { var lp = linePath(start, cur); if (lp) paint(lp); }
+        }
+        function up() {
+          document.removeEventListener('pointermove', mv);
+          document.removeEventListener('pointerup', up);
+          var word = path.map(function(ci) { return gridL[ci]; }).join('');
+          var rev = word.split('').reverse().join('');
+          var hit = null;
+          wsWords.forEach(function(w) { if (!foundWords[w] && (w === word || w === rev)) hit = w; });
+          if (hit) {
+            foundWords[hit] = true;
+            path.forEach(function(ci) { cellEls[ci].classList.remove('path'); cellEls[ci].classList.add('found'); });
+            wordEls[hit].classList.add('got');
+            path = [];
+            if (wsWords.every(function(w) { return foundWords[w]; })) {
+              var right = wsMisses <= wsWords.length * 2;
+              settle(right, (cue.quiz.correctFeedback || 'All words found')
+                + ' \\u2014 ' + wsMisses + ' stray swipe' + (wsMisses === 1 ? '' : 's') + '.');
+            }
+          } else {
+            if (path.length > 1) wsMisses++;
+            var flash = path.slice();
+            paint([]);
+            flash.forEach(function(ci) { cellEls[ci].classList.add('no'); });
+            setTimeout(function() { flash.forEach(function(ci) { cellEls[ci].classList.remove('no'); }); }, 320);
+          }
+          start = -1;
+        }
+        document.addEventListener('pointermove', mv);
+        document.addEventListener('pointerup', up);
+      });
+      box.appendChild(gridEl);
+      box.appendChild(wordsCol);
+    }
+    else if (qtype === 'guess_concept') {
+      // Genially "Guess the character": clues reveal one by one; guess any
+      // time — fewer clues used, sharper the win. Answers = options with
+      // isCorrect (accepted spellings); the rest are clues, in order.
+      var gAnswers = (cue.quiz.options || []).filter(function(o) { return o.isCorrect; });
+      var gHints = (cue.quiz.options || []).filter(function(o) { return !o.isCorrect; });
+      var hintsBox = document.createElement('div');
+      hintsBox.className = 'qz-gc-hints';
+      var shown = 0;
+      var more = document.createElement('button');
+      more.className = 'qz-gc-more qz-anim';
+      function revealHint() {
+        if (shown >= gHints.length) return;
+        var h = document.createElement('div');
+        h.className = 'qz-gc-hint';
+        renderRich(h, gHints[shown].text);
+        hintsBox.appendChild(h);
+        shown++;
+        more.textContent = shown < gHints.length
+          ? '+ reveal clue ' + (shown + 1) + ' of ' + gHints.length
+          : 'no clues left \\u2014 take your shot';
+        if (shown >= gHints.length) more.disabled = true;
+      }
+      more.onclick = function() { if (!answered) revealHint(); };
+      var row = document.createElement('div');
+      row.className = 'qz-gc-row qz-anim';
+      var gInput = document.createElement('input');
+      gInput.className = 'qz-input';
+      gInput.placeholder = 'Your guess\\u2026';
+      gInput.setAttribute('autocomplete', 'off');
+      row.appendChild(gInput);
+      var wrongTries = 0;
+      function guess() {
+        if (answered || !normalize(gInput.value)) return;
+        var hit = null;
+        gAnswers.forEach(function(a) { if (normalize(a.text) === normalize(gInput.value)) hit = a; });
+        if (hit) {
+          gInput.classList.add('correct');
+          settle(true, (hit.feedback || cue.quiz.correctFeedback || 'Got it')
+            + ' \\u2014 with ' + shown + ' of ' + gHints.length + ' clues.');
+          return;
+        }
+        wrongTries++;
+        gInput.classList.add('wrong');
+        setTimeout(function() { gInput.classList.remove('wrong'); }, 500);
+        if (shown < gHints.length) { revealHint(); gInput.value = ''; }
+        else if (wrongTries >= gHints.length + 1 || wrongTries >= shown + 1) {
+          var chip = document.createElement('span');
+          chip.className = 'qz-answer-chip';
+          var kk2 = document.createElement('span');
+          kk2.className = 'k';
+          kk2.textContent = '\\u2713';
+          var bd = document.createElement('span');
+          renderRich(bd, gAnswers[0] ? gAnswers[0].text : '');
+          chip.appendChild(kk2);
+          chip.appendChild(bd);
+          row.appendChild(chip);
+          settle(false, cue.quiz.wrongFeedback || 'The answer is revealed \\u2014 worth a rewatch.');
+        }
+      }
+      gInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') guess(); });
+      submit.classList.add('show');
+      submit.onclick = guess;
+      box.appendChild(hintsBox);
+      box.appendChild(more);
+      box.appendChild(row);
+      revealHint();
+      setTimeout(function() { gInput.focus(); }, 700);
     }
     else {
       // multiple_choice / true_false / multi_select / image_choice share one

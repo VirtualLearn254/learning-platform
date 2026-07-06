@@ -337,6 +337,41 @@ DEMOS.push(
     },
   },
   {
+    label: "word search",
+    cue: {
+      atSec: 0, beatKey: "demo_ws",
+      quiz: {
+        type: "word_search",
+        question: "Find the four exponent-law terms hidden in the grid.",
+        options: [
+          { id: "w1", text: "POWER", isCorrect: true },
+          { id: "w2", text: "BASE", isCorrect: true },
+          { id: "w3", text: "PRODUCT", isCorrect: true },
+          { id: "w4", text: "QUOTIENT", isCorrect: true },
+        ],
+        correctFeedback: "All four terms found",
+      },
+    },
+  },
+  {
+    label: "guess the concept",
+    cue: {
+      atSec: 0, beatKey: "demo_gc",
+      quiz: {
+        type: "guess_concept",
+        question: "Guess the cybersecurity term from the clues.",
+        options: [
+          { id: "a1", text: "phishing", isCorrect: true, feedback: "Exactly — engineered urgency, spoofed identity, credential theft." },
+          { id: "h1", text: "I arrive uninvited, wearing a trusted brand's clothes." },
+          { id: "h2", text: "I always claim it's urgent — 24 hours, or else." },
+          { id: "h3", text: "My links never quite match the domain they claim to be." },
+          { id: "h4", text: "One employee's click is all I need to get inside." },
+        ],
+        wrongFeedback: "It's phishing — the impersonation + urgency + credential-request trio.",
+      },
+    },
+  },
+  {
     label: "estimate",
     cue: {
       atSec: 0, beatKey: "demo_est",
