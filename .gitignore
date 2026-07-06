@@ -44,3 +44,5 @@ apps/api/scripts/glm-output.html
 apps/api/scripts/beat-data.json
 apps/api/scripts/fw-response.json
 apps/api/scripts/glm-final.html
+apps/api/scripts/.quiz-preview-*/
+apps/api/scripts/quiz-preview-*.png
