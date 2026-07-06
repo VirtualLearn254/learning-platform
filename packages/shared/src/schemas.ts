@@ -16,6 +16,7 @@ export const BloomLevelSchema = z.enum([
 export const QuizTypeSchema = z.enum([
   "multiple_choice", "match", "fill_in", "scenario", "likert",
   "true_false", "multi_select", "hotspot",
+  "ordering", "sort_into", "word_bank", "image_choice", "estimate", "flashcard",
 ]);
 
 export const QuizOptionSchema = z.object({
@@ -28,6 +29,8 @@ export const QuizOptionSchema = z.object({
   numericTolerancePct: z.number().optional(),
   /** hotspot: clickable region in percent of the quiz image. */
   region: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).optional(),
+  /** image_choice: the option's picture (URL or data URI). */
+  image: z.string().optional(),
 });
 
 export const QuizBranchSchema = z.object({

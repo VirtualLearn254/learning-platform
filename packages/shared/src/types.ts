@@ -6,7 +6,10 @@
 
 export type BloomLevel = "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create";
 
-export type QuizType = "multiple_choice" | "match" | "fill_in" | "scenario" | "likert" | "true_false" | "multi_select" | "hotspot";
+export type QuizType =
+  | "multiple_choice" | "match" | "fill_in" | "scenario" | "likert"
+  | "true_false" | "multi_select" | "hotspot"
+  | "ordering" | "sort_into" | "word_bank" | "image_choice" | "estimate" | "flashcard";
 
 export type BeatType = "hook" | "concept" | "example" | "check" | "recap";
 
@@ -138,6 +141,8 @@ export interface QuizOption {
   numericTolerancePct?: number;
   /** hotspot: clickable region in percent of the quiz image. */
   region?: { x: number; y: number; w: number; h: number };
+  /** image_choice: the option's picture (URL or data URI). */
+  image?: string;
 }
 
 export interface QuizBranch {

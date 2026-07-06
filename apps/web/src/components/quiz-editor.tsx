@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
-const TYPES: QuizType[] = ["multiple_choice", "true_false", "multi_select", "fill_in", "hotspot", "match", "scenario", "likert"];
+const TYPES: QuizType[] = [
+  "multiple_choice", "true_false", "multi_select", "fill_in", "hotspot",
+  "match", "ordering", "sort_into", "word_bank", "scenario", "likert",
+  "flashcard", "image_choice", "estimate",
+];
 
 export function QuizEditor({ value, onChange }: { value: QuizSpec | null; onChange: (v: QuizSpec) => void }) {
   const [local, setLocal] = useState<QuizSpec>(value ?? makeDefault("multiple_choice"));

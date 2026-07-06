@@ -142,6 +142,175 @@ const DEMOS = [
   },
 ];
 
+// Small SVG curve cards for image_choice ("which graph shows…").
+function curveSvg(path: string, stroke = "#2563eb"): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="140" viewBox="0 0 240 140">
+    <rect width="240" height="140" fill="#ffffff"/>
+    <line x1="24" y1="116" x2="224" y2="116" stroke="#d1d5db" stroke-width="2"/>
+    <line x1="24" y1="116" x2="24" y2="16" stroke="#d1d5db" stroke-width="2"/>
+    <path d="${path}" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/>
+  </svg>`;
+  return "data:image/svg+xml," + encodeURIComponent(svg);
+}
+
+DEMOS.push(
+  {
+    label: "match",
+    cue: {
+      atSec: 0, beatKey: "demo_match",
+      quiz: {
+        type: "match",
+        question: "Match each exponent law to its rule.",
+        options: [
+          // lefts (carry matchTargetId) …
+          { id: "l1", text: "Product law", matchTargetId: "r1" },
+          { id: "l2", text: "Quotient law", matchTargetId: "r2" },
+          { id: "l3", text: "Power of a power", matchTargetId: "r3" },
+          // …rights (the targets)
+          { id: "r1", text: "x^a · x^b = x^(a+b)" },
+          { id: "r2", text: "x^a ÷ x^b = x^(a-b)" },
+          { id: "r3", text: "(x^a)^b = x^(ab)" },
+        ],
+        correctFeedback: "All three laws matched to their rules.",
+        wrongFeedback: "Check the red pairs — add for products, subtract for quotients, multiply for powers of powers.",
+      },
+    },
+  },
+  {
+    label: "ordering",
+    cue: {
+      atSec: 0, beatKey: "demo_ord",
+      quiz: {
+        type: "ordering",
+        question: "Put the steps for simplifying (x^3 · y^-2)^2 ÷ x^4 in order.",
+        options: [
+          { id: "s1", text: "Apply the square to each factor" },
+          { id: "s2", text: "Multiply the inner exponents by 2" },
+          { id: "s3", text: "Subtract exponents of like bases" },
+          { id: "s4", text: "Rewrite negatives as positive exponents" },
+        ],
+        correctFeedback: "That's the exact pipeline: distribute, multiply, subtract, tidy.",
+      },
+    },
+  },
+  {
+    label: "sort into",
+    cue: {
+      atSec: 0, beatKey: "demo_sort",
+      quiz: {
+        type: "sort_into",
+        question: "Sort each account into the correct side of the balance sheet.",
+        options: [
+          // buckets (no matchTargetId) …
+          { id: "assets", text: "Assets" },
+          { id: "liab", text: "Liabilities" },
+          // …items point at a bucket
+          { id: "i1", text: "Cash", matchTargetId: "assets" },
+          { id: "i2", text: "Bank loan", matchTargetId: "liab" },
+          { id: "i3", text: "Inventory", matchTargetId: "assets" },
+          { id: "i4", text: "Accounts payable", matchTargetId: "liab" },
+          { id: "i5", text: "Equipment", matchTargetId: "assets" },
+        ],
+        correctFeedback: "Perfect — resources you own vs. amounts you owe.",
+        wrongFeedback: "The red chips are on the wrong side: assets are what you OWN, liabilities what you OWE.",
+      },
+    },
+  },
+  {
+    label: "word bank",
+    cue: {
+      atSec: 0, beatKey: "demo_wb",
+      quiz: {
+        type: "word_bank",
+        question: "When dividing powers with the same base, ___ the exponents; when raising a power to a power, ___ them.",
+        options: [
+          { id: "w1", text: "subtract", isCorrect: true },
+          { id: "w2", text: "multiply", isCorrect: true },
+          { id: "w3", text: "add" },
+          { id: "w4", text: "divide" },
+        ],
+        correctFeedback: "Both gaps right — subtract for quotients, multiply for powers of powers.",
+      },
+    },
+  },
+  {
+    label: "scenario",
+    cue: {
+      atSec: 0, beatKey: "demo_sc",
+      quiz: {
+        type: "scenario",
+        question: "An email from \"IT Service Desk\" says your mailbox will be suspended in 24 hours unless you verify your credentials at the link provided. It's 4:55pm on a Friday and you're about to leave. What do you do?",
+        options: [
+          { id: "a", text: "Report it with the phishing button and leave", isCorrect: true, feedback: "Right — urgency + credential requests = classic phishing. Reporting protects colleagues too." },
+          { id: "b", text: "Click the link quickly to keep your mailbox", feedback: "That urgency is engineered exactly so you act before thinking — never verify credentials from an email link." },
+          { id: "c", text: "Forward it to a teammate to ask if it's real", feedback: "Well-meant, but that spreads the malicious link. Use the report button — that's what it's for." },
+        ],
+      },
+    },
+  },
+  {
+    label: "likert",
+    cue: {
+      atSec: 0, beatKey: "demo_lk",
+      quiz: {
+        type: "likert",
+        question: "How confident do you feel applying the six exponent laws on your own?",
+        options: [
+          { id: "1", text: "Not yet", feedback: "Honest — consider rewatching the worked example before the final check." },
+          { id: "2", text: "Getting there", feedback: "Good — the practice check coming up will firm it up." },
+          { id: "3", text: "Fairly confident", feedback: "Great — the final challenge should confirm it." },
+          { id: "4", text: "Could teach it", feedback: "Excellent — see if you can beat the final check without pausing." },
+        ],
+      },
+    },
+  },
+  {
+    label: "flashcard",
+    cue: {
+      atSec: 0, beatKey: "demo_fc",
+      quiz: {
+        type: "flashcard",
+        question: "What does the quotient law of exponents say?",
+        options: [
+          { id: "a", text: "x^a ÷ x^b = x^(a-b) — same base, subtract the exponents.", isCorrect: true, feedback: "The one everyone flips: subtract, don't divide, the exponents." },
+        ],
+      },
+    },
+  },
+  {
+    label: "image choice",
+    cue: {
+      atSec: 0, beatKey: "demo_img",
+      quiz: {
+        type: "image_choice",
+        question: "Which graph shows exponential growth?",
+        options: [
+          { id: "a", text: "Curve A", image: curveSvg("M 24 116 L 224 26"), feedback: "That's linear — constant slope, adds the same amount each step." },
+          { id: "b", text: "Curve B", image: curveSvg("M 24 112 C 100 108, 170 90, 224 20"), isCorrect: true, feedback: "Yes — slow start, then the doubling takes over. Growth proportional to current value." },
+          { id: "c", text: "Curve C", image: curveSvg("M 24 110 C 70 40, 140 28, 224 24"), feedback: "That's logarithmic — fast start that flattens out, the opposite shape." },
+          { id: "d", text: "Curve D", image: curveSvg("M 24 30 C 90 100, 160 100, 224 110"), feedback: "That's decay — it's heading down." },
+        ],
+      },
+    },
+  },
+  {
+    label: "estimate",
+    cue: {
+      atSec: 0, beatKey: "demo_est",
+      quiz: {
+        type: "estimate",
+        question: "Slide to your estimate: what is 2^10?",
+        options: [
+          { id: "min", text: "min", numericValue: 0 },
+          { id: "max", text: "max", numericValue: 2000 },
+          { id: "answer", text: "1024", isCorrect: true, numericValue: 1024, numericTolerancePct: 8, feedback: "2^10 = 1,024 — the famous 'kilo' of computing." },
+        ],
+        wrongFeedback: "2^10 = 1,024. Ten doublings from 1 grow much faster than intuition expects.",
+      },
+    },
+  },
+);
+
 const html = buildQuizStyleGallery(DEMOS);
 const out = join(HERE, "quiz-style-gallery.html");
 writeFileSync(out, html, "utf-8");
