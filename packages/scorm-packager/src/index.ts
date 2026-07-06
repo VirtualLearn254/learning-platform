@@ -387,8 +387,11 @@ const QUIZ_SCENE_CSS = `
   }
   .qz-est-bounds { display: flex; justify-content: space-between; font-size: 0.68em; color: var(--q-muted, #8B98A5); margin-top: 0.4em; }
   .qz-est-reveal { margin-top: 0.7em; font-size: 0.8em; font-weight: 700; color: #10B981; display: none; }
-  .qz-foot { display: flex; align-items: center; gap: 1.2em; margin-top: 1.2em; min-height: 2.4em; max-width: 82%; }
-  .qz-fb { font-size: 0.72em; line-height: 1.45; color: var(--q-muted, #8B98A5); flex: 1; }
+  /* The foot WRAPS: when action buttons are wide (retry + continue, or a
+     verbose skin), they drop to their own line instead of squeezing the
+     feedback into a one-word column. */
+  .qz-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.8em 1.2em; margin-top: 1.2em; min-height: 2.4em; max-width: 82%; }
+  .qz-fb { font-size: 0.72em; line-height: 1.45; color: var(--q-muted, #8B98A5); flex: 1 1 auto; min-width: 58%; }
   .qz-go {
     padding: 0.7em 1.6em; background: var(--q-accent, #22D3EE); color: var(--q-btn-ink, #08221a);
     border: 0; border-radius: 2em; font-size: 0.78em; font-weight: 700; cursor: pointer;
