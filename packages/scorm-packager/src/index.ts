@@ -1610,9 +1610,10 @@ window.__quizEngine = (function() {
  *   - Marks incomplete + disconnects on unload
  *   - Records session_time via native LMS clock (no manual tracking needed)
  */
-function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): string {
+function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[], quizSkinCss?: string): string {
   const title = htmlEscape(lesson.title);
   const quizJson = JSON.stringify(quizzes).replace(/</g, "\\u003c");
+  const skin = quizSkinCss ? `<style id="quiz-skin">\n${quizSkinCss.replace(/<\//g, "<\\/")}\n</style>` : "";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -1672,6 +1673,7 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
   .qmark.done { background: #34D399; border-color: #34D399; }
 ${QUIZ_SCENE_CSS}
 </style>
+${skin}
 </head>
 <body>
   <div class="stage">
@@ -1926,12 +1928,49 @@ ${QUIZ_ENGINE_JS}
 }
 
 /**
+ * Static safety lint for AI-generated quiz skins. The skin may restyle
+ * anything visual, but must not break the engine's BEHAVIOR: no hiding
+ * interactive elements, no hijacking pointer events or the drag ghost's
+ * positioning, and every rule must stay inside the quiz-scene scope.
+ * On failure, ship WITHOUT the skin — the palette default applies.
+ */
+export function lintQuizSkin(css: string): { ok: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (!css || !css.trim()) return { ok: false, errors: ["empty skin"] };
+  if (css.length > 24_000) errors.push(`skin too large (${css.length} chars > 24000)`);
+  if (/<\s*\/?\s*(script|style|link)/i.test(css)) errors.push("markup inside skin CSS");
+  if (/@import|url\s*\(\s*['"]?\s*http/i.test(css)) errors.push("external resources (@import / http url()) not allowed — fonts must be system stacks or data URIs");
+  const forbidden: Array<[RegExp, string]> = [
+    [/display\s*:\s*none/i, "display:none (hides engine elements)"],
+    [/visibility\s*:\s*hidden/i, "visibility:hidden"],
+    [/pointer-events\s*:/i, "pointer-events (breaks interactions)"],
+    [/position\s*:\s*(fixed|sticky)/i, "position:fixed/sticky (breaks the drag ghost)"],
+  ];
+  for (const [re, why] of forbidden) if (re.test(css)) errors.push(`forbidden property: ${why}`);
+  // Every selector must live inside the quiz scene scope.
+  const noComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const selectorParts = noComments.split("}").map((block) => block.split("{")[0] ?? "").filter((s) => s.trim());
+  for (const sel of selectorParts) {
+    if (/^\s*@/.test(sel)) continue; // @media / @keyframes headers
+    for (const single of sel.split(",")) {
+      const t = single.trim();
+      if (!t) continue;
+      if (!/(\.quiz-scene|\.qz-|\bfrom\b|\bto\b|^\d+%$)/.test(t)) {
+        errors.push(`selector outside quiz scope: "${t.slice(0, 60)}"`);
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors: [...new Set(errors)].slice(0, 12) };
+}
+
+/**
  * Standalone quiz style gallery — a single HTML file for viewing and
  * evolving quiz styles WITHOUT a video. Same CSS + engine as the SCORM
  * player, so what you approve here is exactly what ships in lessons.
  * Chrome: style buttons + palette switcher + a fixed 16:9 stage.
+ * Pass `skinCss` to preview a quiz skin over the default styling.
  */
-export function buildQuizStyleGallery(demos: Array<{ label: string; cue: ScormQuizCue }>): string {
+export function buildQuizStyleGallery(demos: Array<{ label: string; cue: ScormQuizCue }>, skinCss?: string): string {
   const demosJson = JSON.stringify(demos).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
@@ -1961,6 +2000,7 @@ ${QUIZ_SCENE_CSS}
   .quiz-scene { z-index: 2; }
   .qz-frame { inset: 0; }
 </style>
+${skinCss ? `<style id="quiz-skin">\n${skinCss.replace(/<\//g, "<\\/")}\n</style>` : ""}
 </head>
 <body>
   <div class="chrome">
@@ -2125,6 +2165,11 @@ export interface ScormBuildInput {
   branding?: {
     organizationName?: string;
   };
+  /** Per-lesson quiz SKIN — CSS targeting the .qz-* contract, generated at
+   *  production time by the designer AI so quizzes align with the lesson's
+   *  visual language. Injected after the base scene CSS. Run lintQuizSkin()
+   *  first; on lint failure ship without it (palette default applies). */
+  quizSkinCss?: string;
   /** SCORM version target. 2004 4th Ed is the default and recommended. */
   version?: "2004_4";
 }
@@ -2149,7 +2194,7 @@ export interface ScormPackager {
 export function createScormPackager(): ScormPackager {
   return {
     async build(input) {
-      const playerHtml = buildPlayerHtml(input.lesson, input.quizzes ?? []);
+      const playerHtml = buildPlayerHtml(input.lesson, input.quizzes ?? [], input.quizSkinCss);
       const zip = new JSZip();
       zip.file("imsmanifest.xml", buildManifest(input.lesson, { organization: input.branding?.organizationName }));
       zip.file("index.html", playerHtml);

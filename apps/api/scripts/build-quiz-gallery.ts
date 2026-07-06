@@ -5,12 +5,17 @@
  *
  * Run:    npx tsx apps/api/scripts/build-quiz-gallery.ts
  * Output: apps/api/scripts/quiz-style-gallery.html  (open in a browser)
+ *
+ * QUIZ SKIN iteration loop (LP-15): drop CSS into
+ * apps/api/scripts/quiz-skin-draft.css and rebuild — the gallery renders
+ * with the skin applied (after passing lintQuizSkin), exactly as the SCORM
+ * player would ship it.
  */
 
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildQuizStyleGallery } from "@lp/scorm-packager";
+import { buildQuizStyleGallery, lintQuizSkin } from "@lp/scorm-packager";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -389,7 +394,20 @@ DEMOS.push(
   },
 );
 
-const html = buildQuizStyleGallery(DEMOS);
+let skinCss: string | undefined;
+const skinPath = join(HERE, "quiz-skin-draft.css");
+if (existsSync(skinPath)) {
+  const draft = readFileSync(skinPath, "utf-8");
+  const lint = lintQuizSkin(draft);
+  if (lint.ok) {
+    skinCss = draft;
+    console.log(`[gallery] quiz skin applied from quiz-skin-draft.css (${(draft.length / 1024).toFixed(1)} KB)`);
+  } else {
+    console.warn(`[gallery] quiz-skin-draft.css FAILED lint — building without it:\n  - ${lint.errors.join("\n  - ")}`);
+  }
+}
+
+const html = buildQuizStyleGallery(DEMOS, skinCss);
 const out = join(HERE, "quiz-style-gallery.html");
 writeFileSync(out, html, "utf-8");
 console.log(`[gallery] wrote ${out} (${(html.length / 1024).toFixed(0)} KB) — open it in a browser`);
