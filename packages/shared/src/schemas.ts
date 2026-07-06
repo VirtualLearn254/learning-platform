@@ -15,7 +15,7 @@ export const BloomLevelSchema = z.enum([
 
 export const QuizTypeSchema = z.enum([
   "multiple_choice", "match", "fill_in", "scenario", "likert",
-  "true_false", "multi_select",
+  "true_false", "multi_select", "hotspot",
 ]);
 
 export const QuizOptionSchema = z.object({
@@ -26,6 +26,8 @@ export const QuizOptionSchema = z.object({
   matchTargetId: z.string().optional(),
   numericValue: z.number().optional(),
   numericTolerancePct: z.number().optional(),
+  /** hotspot: clickable region in percent of the quiz image. */
+  region: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).optional(),
 });
 
 export const QuizBranchSchema = z.object({
@@ -39,6 +41,8 @@ export const QuizSpecSchema = z.object({
   question: z.string(),
   eyebrow: z.string().optional(),
   bloomLevel: BloomLevelSchema.optional(),
+  /** hotspot: the image that is the question canvas (URL or data URI). */
+  image: z.string().optional(),
   options: z.array(QuizOptionSchema),
   correctFeedback: z.string().optional(),
   wrongFeedback: z.string().optional(),

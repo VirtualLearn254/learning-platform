@@ -6,7 +6,7 @@
 
 export type BloomLevel = "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create";
 
-export type QuizType = "multiple_choice" | "match" | "fill_in" | "scenario" | "likert" | "true_false" | "multi_select";
+export type QuizType = "multiple_choice" | "match" | "fill_in" | "scenario" | "likert" | "true_false" | "multi_select" | "hotspot";
 
 export type BeatType = "hook" | "concept" | "example" | "check" | "recap";
 
@@ -120,6 +120,8 @@ export interface QuizSpec {
   question: string;
   eyebrow?: string;
   bloomLevel?: BloomLevel;
+  /** hotspot: the image that is the question canvas (URL or data URI). */
+  image?: string;
   options: QuizOption[];
   correctFeedback?: string;
   wrongFeedback?: string;
@@ -134,6 +136,8 @@ export interface QuizOption {
   matchTargetId?: string;
   numericValue?: number;
   numericTolerancePct?: number;
+  /** hotspot: clickable region in percent of the quiz image. */
+  region?: { x: number; y: number; w: number; h: number };
 }
 
 export interface QuizBranch {

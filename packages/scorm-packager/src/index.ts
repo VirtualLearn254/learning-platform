@@ -77,6 +77,390 @@ function buildManifest(lesson: { id: string; title: string; summary?: string | n
 `;
 }
 
+// ─── Quiz scene: shared CSS + markup + engine ───────────────────────
+// One source of truth for the quiz styles — used by the SCORM player
+// (video takeover) AND the standalone style gallery (design iteration).
+// Types follow H5P Interactive Video's proven data model, rendered in
+// our palette scenes instead of their white cards.
+
+const QUIZ_SCENE_CSS = `
+  /* ── Quiz scene ──────────────────────────────────────────────
+     Not a popup. A full-stage takeover in the same palette CSS vars
+     the designer used for the beat. Per-cue colors arrive as --q-* vars;
+     the em unit is set by the host to frameWidth/42 (≈ the 1920×1080
+     design grid of the beats). */
+  .quiz-scene {
+    position: absolute; inset: 0; display: none; overflow: hidden;
+    background: var(--q-bg, #101418); color: var(--q-ink, #EEF2F5);
+    opacity: 0; transition: opacity 0.35s ease; z-index: 10;
+    font-family: system-ui, "Helvetica Neue", Arial, sans-serif;
+  }
+  .quiz-scene.open { display: block; }
+  .quiz-scene.visible { opacity: 1; }
+  .qz-frame {
+    position: absolute;
+    display: flex; flex-direction: column;
+    /* "safe center": tall content (hotspot images, long questions) clips at
+       the bottom instead of pushing the rule/eyebrow off the top. */
+    justify-content: center; justify-content: safe center;
+    padding: 3.2em 5em; box-sizing: border-box;
+  }
+  .qz-deco {
+    position: absolute; right: -0.12em; bottom: -0.38em;
+    font-size: 15em; font-weight: 800; line-height: 1;
+    color: var(--q-accent-faint, rgba(255,255,255,0.05));
+    pointer-events: none; user-select: none;
+  }
+  .qz-rule { width: 3.2em; height: 0.22em; background: var(--q-accent, #22D3EE); border-radius: 0.11em; margin-bottom: 1.1em; }
+  .qz-eyebrow {
+    font-size: 0.62em; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--q-accent, #22D3EE); font-weight: 700; margin-bottom: 0.9em;
+  }
+  .qz-q {
+    font-size: 1.55em; font-weight: 700; line-height: 1.25;
+    letter-spacing: -0.01em; max-width: 78%; margin-bottom: 1.1em;
+  }
+  .qz-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7em; max-width: 82%; }
+  /* true_false: two large verdict cards, no letter chips */
+  .qz-opts.tf { max-width: 56%; }
+  .qz-opts.tf .qz-opt { text-align: center; font-size: 1em; font-weight: 700; padding: 1.05em 1em; }
+  .qz-opts.tf .k { display: none; }
+  /* multi_select: cards toggle before a submit step */
+  .qz-opt.sel { border-color: var(--q-accent, #22D3EE); background: var(--q-accent-soft, rgba(34,211,238,0.12)); }
+  .qz-opt {
+    text-align: left; padding: 0.85em 1em;
+    background: var(--q-surface, #171C22); color: var(--q-ink, #EEF2F5);
+    border: 1.5px solid var(--q-line, rgba(0,0,0,0.14)); border-radius: 0.55em;
+    font-size: 0.82em; line-height: 1.35; cursor: pointer; font-family: inherit;
+    transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+  }
+  .qz-opt .k { color: var(--q-accent, #22D3EE); font-weight: 700; margin-right: 0.55em; }
+  .qz-opt:hover:not(:disabled) { border-color: var(--q-accent, #22D3EE); transform: translateY(-2px); }
+  .qz-opt:disabled { cursor: default; }
+  /* Verdicts use fixed semantic colors — palettes with red/green accents
+     (swiss-grid, paper-mark) would otherwise make right and wrong identical. */
+  .qz-opt.correct { border-color: #10B981; background: rgba(16,185,129,0.12); }
+  .qz-opt.correct .k { color: #10B981; }
+  .qz-opt.wrong { border-color: #EF4444; background: rgba(239,68,68,0.1); }
+  .qz-opt.wrong .k { color: #EF4444; }
+  /* fill_in: typed answer with tolerant matching */
+  .qz-opts.fi { display: flex; max-width: 82%; }
+  .qz-input {
+    font-family: inherit; font-size: 0.95em; padding: 0.7em 1em;
+    background: var(--q-surface, #171C22); color: var(--q-ink, #EEF2F5);
+    border: 1.5px solid var(--q-line, rgba(0,0,0,0.14)); border-radius: 0.55em;
+    width: 16em; max-width: 100%; outline: none;
+    transition: border-color 0.18s ease;
+  }
+  .qz-input::placeholder { color: var(--q-muted, #8B98A5); opacity: 0.7; }
+  .qz-input:focus { border-color: var(--q-accent, #22D3EE); }
+  .qz-input.correct { border-color: #10B981; background: rgba(16,185,129,0.12); }
+  .qz-input.wrong { border-color: #EF4444; background: rgba(239,68,68,0.1); }
+  .qz-answer-chip {
+    display: inline-flex; align-items: center; align-self: center;
+    margin-left: 0.8em; padding: 0.7em 1em; font-size: 0.82em;
+    border: 1.5px solid #10B981; background: rgba(16,185,129,0.12);
+    border-radius: 0.55em; color: var(--q-ink, #EEF2F5);
+  }
+  .qz-answer-chip .k { color: #10B981; font-weight: 700; margin-right: 0.55em; }
+  /* hotspot: the image is the question canvas */
+  .qz-opts.hs { display: block; max-width: 82%; }
+  .qz-hs-wrap {
+    position: relative; display: inline-block; max-width: 46%;
+    border: 1.5px solid var(--q-line, rgba(0,0,0,0.14)); border-radius: 0.55em;
+    overflow: hidden; cursor: crosshair; line-height: 0;
+    background: var(--q-surface, #171C22);
+  }
+  .qz-hs-wrap img { width: 100%; height: auto; display: block; user-select: none; -webkit-user-drag: none; }
+  .qz-hs-wrap.done { cursor: default; }
+  .qz-hs-dot {
+    position: absolute; width: 1em; height: 1em; border-radius: 50%;
+    transform: translate(-50%, -50%); pointer-events: none;
+    border: 0.16em solid #fff; box-shadow: 0 0 0 0.12em rgba(0,0,0,0.35);
+    box-sizing: border-box;
+  }
+  .qz-hs-dot.correct { background: #10B981; }
+  .qz-hs-dot.wrong { background: #EF4444; }
+  .qz-hs-region {
+    position: absolute; pointer-events: none; box-sizing: border-box;
+    border: 0.14em dashed #10B981; border-radius: 0.3em;
+    background: rgba(16,185,129,0.14);
+  }
+  .qz-foot { display: flex; align-items: center; gap: 1.2em; margin-top: 1.2em; min-height: 2.4em; max-width: 82%; }
+  .qz-fb { font-size: 0.72em; line-height: 1.45; color: var(--q-muted, #8B98A5); flex: 1; }
+  .qz-go {
+    padding: 0.7em 1.6em; background: var(--q-accent, #22D3EE); color: var(--q-btn-ink, #08221a);
+    border: 0; border-radius: 2em; font-size: 0.78em; font-weight: 700; cursor: pointer;
+    font-family: inherit; display: none; white-space: nowrap;
+  }
+  .qz-go.show { display: inline-block; }
+  /* Staggered entrance — each element rises in like a designed reveal. */
+  .qz-anim { opacity: 0; transform: translateY(0.8em); transition: opacity 0.45s ease, transform 0.45s ease; }
+  .qz-anim.in { opacity: 1; transform: translateY(0); }
+`;
+
+const QUIZ_SCENE_HTML = `
+      <div class="qz-frame" id="qz-frame">
+        <div class="qz-deco">?</div>
+        <div class="qz-rule qz-anim"></div>
+        <div class="qz-eyebrow qz-anim" id="qz-eyebrow">Check your understanding</div>
+        <div class="qz-q qz-anim" id="qz-q"></div>
+        <div class="qz-opts" id="qz-opts"></div>
+        <div class="qz-foot">
+          <div class="qz-fb" id="qz-fb"></div>
+          <button class="qz-go" id="qz-submit">Submit</button>
+          <button class="qz-go" id="qz-go">Continue &#9656;</button>
+        </div>
+      </div>
+`;
+
+/** The quiz engine: window.__quizEngine.render(cue, ctx) fills the scene,
+ *  wires interactions, opens it with staggered entrances, and reports via
+ *  ctx.onSettle(right) / ctx.onContinue(). Host supplies scene sizing. */
+const QUIZ_ENGINE_JS = `
+window.__quizEngine = (function() {
+  function hexToRgba(hex, a) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return 'rgba(255,255,255,' + a + ')';
+    var n = parseInt(m[1], 16);
+    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function isDark(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return true;
+    var n = parseInt(m[1], 16);
+    return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) < 140;
+  }
+  function applyPalette(overlay, style) {
+    var s = style || {};
+    var bg = s.bg || '#101418', ink = s.ink || '#EEF2F5', accent = s.accent || '#22D3EE';
+    overlay.style.setProperty('--q-bg', bg);
+    overlay.style.setProperty('--q-ink', ink);
+    overlay.style.setProperty('--q-muted', s.muted || '#8B98A5');
+    overlay.style.setProperty('--q-accent', accent);
+    overlay.style.setProperty('--q-surface', s.surface || (isDark(bg) ? 'rgba(255,255,255,0.07)' : '#FFFFFF'));
+    overlay.style.setProperty('--q-line', hexToRgba(ink, 0.16));
+    overlay.style.setProperty('--q-accent-soft', hexToRgba(accent, 0.13));
+    overlay.style.setProperty('--q-accent-faint', hexToRgba(accent, isDark(bg) ? 0.08 : 0.07));
+    overlay.style.setProperty('--q-btn-ink', isDark(accent) ? '#FFFFFF' : '#101418');
+  }
+  // Render "x^2" / "y^-9" with real superscripts — the videos typeset
+  // exponents properly, so the quiz must too or the takeover breaks.
+  // DOM-built (text nodes + <sup>), never innerHTML.
+  function renderRich(el, text) {
+    el.textContent = '';
+    var parts = String(text || '').split(/\\^(-?[0-9a-zA-Z]+)/);
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) { el.appendChild(document.createTextNode(parts[i])); }
+      else { var s = document.createElement('sup'); s.textContent = parts[i]; el.appendChild(s); }
+    }
+  }
+  var EYEBROWS = {
+    multiple_choice: 'Check your understanding',
+    true_false: 'True or false?',
+    multi_select: 'Select all that apply',
+    fill_in: 'Type your answer',
+    hotspot: 'Find it in the image'
+  };
+  function normalize(s) { return String(s || '').toLowerCase().replace(/\\s+/g, ''); }
+
+  function render(cue, ctx) {
+    var overlay = ctx.overlay;
+    applyPalette(overlay, cue.style);
+    var qtype = cue.quiz.type || 'multiple_choice';
+    if (!EYEBROWS[qtype]) qtype = 'multiple_choice';        // unknown types fall back
+    if (qtype === 'true_false' && !(cue.quiz.options || []).length) {
+      cue.quiz.options = [{ id: 't', text: 'True' }, { id: 'f', text: 'False' }];
+    }
+    var q = function(sel) { return overlay.querySelector(sel); };
+    q('#qz-eyebrow').textContent = cue.quiz.eyebrow || EYEBROWS[qtype];
+    renderRich(q('#qz-q'), cue.quiz.question);
+    var fb = q('#qz-fb'), go = q('#qz-go'), submit = q('#qz-submit');
+    fb.textContent = '';
+    go.classList.remove('show');
+    submit.classList.remove('show');
+    var box = q('#qz-opts');
+    box.className = 'qz-opts' + (qtype === 'true_false' ? ' tf' : qtype === 'fill_in' ? ' fi' : qtype === 'hotspot' ? ' hs' : '');
+    box.innerHTML = '';
+    var answered = false;
+    var selected = {};
+    var letters = 'ABCDEFGH';
+
+    function settle(right, feedbackText) {
+      answered = true;
+      renderRich(fb, feedbackText);
+      Array.prototype.forEach.call(box.querySelectorAll('button, input'), function(el) { el.disabled = true; });
+      submit.classList.remove('show');
+      go.classList.add('show');
+      ctx.onSettle(right);
+    }
+
+    if (qtype === 'fill_in') {
+      // Typed answer. Accepted answers = options with isCorrect: text match
+      // (case/whitespace-insensitive) or numericValue ± numericTolerancePct.
+      var input = document.createElement('input');
+      input.className = 'qz-input qz-anim';
+      input.placeholder = 'Type your answer\\u2026';
+      input.setAttribute('autocomplete', 'off');
+      input.setAttribute('spellcheck', 'false');
+      box.appendChild(input);
+      var grade = function() {
+        if (answered) return;
+        var raw = input.value;
+        if (!normalize(raw)) { fb.textContent = 'Type an answer first.'; return; }
+        var accepted = (cue.quiz.options || []).filter(function(o) { return o.isCorrect; });
+        var hit = null;
+        for (var i = 0; i < accepted.length; i++) {
+          var o = accepted[i];
+          if (normalize(o.text) === normalize(raw)) { hit = o; break; }
+          if (o.numericValue != null) {
+            var v = parseFloat(raw.replace(/[^0-9.eE+-]/g, ''));
+            var tol = Math.abs(o.numericValue) * ((o.numericTolerancePct || 0) / 100) + 1e-9;
+            if (!isNaN(v) && Math.abs(v - o.numericValue) <= tol) { hit = o; break; }
+          }
+        }
+        var right = !!hit;
+        input.classList.add(right ? 'correct' : 'wrong');
+        if (!right && accepted.length) {
+          var chip = document.createElement('span');
+          chip.className = 'qz-answer-chip';
+          var kk = document.createElement('span');
+          kk.className = 'k';
+          kk.textContent = '\\u2713';
+          var body = document.createElement('span');
+          renderRich(body, accepted[0].text);
+          chip.appendChild(kk);
+          chip.appendChild(body);
+          box.appendChild(chip);
+        }
+        settle(right, (hit && hit.feedback) || (right
+          ? (cue.quiz.correctFeedback || 'Correct.')
+          : (cue.quiz.wrongFeedback || 'Not quite \\u2014 the accepted answer is shown.')));
+      };
+      submit.classList.add('show');
+      submit.onclick = grade;
+      input.addEventListener('keydown', function(e) { if (e.key === 'Enter') grade(); });
+      setTimeout(function() { input.focus(); }, 700);
+    }
+    else if (qtype === 'hotspot') {
+      // The image is the question canvas. Options carry region {x,y,w,h}
+      // in percent of the image; clicking inside a correct region wins.
+      var wrap = document.createElement('div');
+      wrap.className = 'qz-hs-wrap qz-anim';
+      var img = document.createElement('img');
+      img.src = cue.quiz.image || '';
+      img.alt = '';
+      wrap.appendChild(img);
+      box.appendChild(wrap);
+      wrap.addEventListener('click', function(e) {
+        if (answered) return;
+        var r = wrap.getBoundingClientRect();
+        var px = (e.clientX - r.left) / r.width * 100;
+        var py = (e.clientY - r.top) / r.height * 100;
+        var hit = null;
+        (cue.quiz.options || []).forEach(function(o) {
+          var g = o.region;
+          if (g && px >= g.x && px <= g.x + g.w && py >= g.y && py <= g.y + g.h && !hit) hit = o;
+        });
+        var right = !!(hit && hit.isCorrect);
+        var dot = document.createElement('div');
+        dot.className = 'qz-hs-dot ' + (right ? 'correct' : 'wrong');
+        dot.style.left = px + '%';
+        dot.style.top = py + '%';
+        wrap.appendChild(dot);
+        if (!right) {
+          // Reveal every correct region so the learner sees what they missed.
+          (cue.quiz.options || []).forEach(function(o) {
+            if (o.isCorrect && o.region) {
+              var reg = document.createElement('div');
+              reg.className = 'qz-hs-region';
+              reg.style.left = o.region.x + '%';
+              reg.style.top = o.region.y + '%';
+              reg.style.width = o.region.w + '%';
+              reg.style.height = o.region.h + '%';
+              wrap.appendChild(reg);
+            }
+          });
+        }
+        wrap.classList.add('done');
+        settle(right, (hit && hit.feedback) || (right
+          ? (cue.quiz.correctFeedback || 'Correct.')
+          : (cue.quiz.wrongFeedback || 'Not quite \\u2014 the highlighted area is what you were looking for.')));
+      });
+    }
+    else {
+      (cue.quiz.options || []).forEach(function(opt, i) {
+        var b = document.createElement('button');
+        b.className = 'qz-opt qz-anim';
+        var k = document.createElement('span');
+        k.className = 'k';
+        k.textContent = letters.charAt(i);
+        var body = document.createElement('span');
+        renderRich(body, opt.text);
+        b.appendChild(k);
+        b.appendChild(body);
+        if (qtype === 'multi_select') {
+          b.onclick = function() {
+            if (answered) return;
+            selected[i] = !selected[i];
+            b.classList.toggle('sel', !!selected[i]);
+          };
+        }
+        else {
+          // multiple_choice and true_false: one click answers.
+          b.onclick = function() {
+            if (answered) return;
+            var right = !!opt.isCorrect;
+            b.classList.add(right ? 'correct' : 'wrong');
+            if (!right) {
+              Array.prototype.forEach.call(box.children, function(el, j) {
+                if (cue.quiz.options[j] && cue.quiz.options[j].isCorrect) el.classList.add('correct');
+              });
+            }
+            settle(right, opt.feedback || (right ? 'Correct.' : 'Not quite \\u2014 the highlighted answer is correct.'));
+          };
+        }
+        box.appendChild(b);
+      });
+      if (qtype === 'multi_select') {
+        submit.classList.add('show');
+        submit.onclick = function() {
+          if (answered) return;
+          var any = false;
+          for (var i = 0; i < cue.quiz.options.length; i++) if (selected[i]) any = true;
+          if (!any) { fb.textContent = 'Select at least one answer.'; return; }
+          var right = cue.quiz.options.every(function(o, i) { return !!o.isCorrect === !!selected[i]; });
+          Array.prototype.forEach.call(box.children, function(el, i) {
+            var o = cue.quiz.options[i];
+            el.classList.remove('sel');
+            if (selected[i] && o.isCorrect) el.classList.add('correct');
+            else if (selected[i] && !o.isCorrect) el.classList.add('wrong');
+            else if (!selected[i] && o.isCorrect) el.classList.add('correct'); // reveal missed
+          });
+          settle(right, right
+            ? (cue.quiz.correctFeedback || 'Correct \\u2014 you found them all.')
+            : (cue.quiz.wrongFeedback || 'Not quite \\u2014 the full correct set is highlighted.'));
+        };
+      }
+    }
+
+    go.onclick = function() { ctx.onContinue(); };
+    // Crossfade in, then stagger the reveals — same rhythm as a designed
+    // beat, not a dialog popping open.
+    overlay.classList.add('open');
+    var anims = overlay.querySelectorAll('.qz-anim');
+    Array.prototype.forEach.call(anims, function(el) { el.classList.remove('in'); });
+    requestAnimationFrame(function() {
+      overlay.classList.add('visible');
+      Array.prototype.forEach.call(anims, function(el, i) {
+        setTimeout(function() { el.classList.add('in'); }, 380 + i * 110);
+      });
+    });
+  }
+  return { render: render, applyPalette: applyPalette };
+})();
+`;
+
 /**
  * Player HTML wrapper. Full-viewport <video> that:
  *   - Calls scorm.connect() on load
@@ -144,75 +528,7 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     transform: translateX(-50%); pointer-events: none;
   }
   .qmark.done { background: #34D399; border-color: #34D399; }
-  /* ── Quiz scene ──────────────────────────────────────────────
-     Not a popup. A full-stage takeover in the same palette CSS vars
-     the designer used for the beat — the background paints edge to
-     edge (including any letterbox area) so it plays as the next
-     sub-scene of the video, while .qz-frame keeps the content laid
-     out in the centered 16:9 box to match the beats' proportions.
-     Per-cue colors arrive as --q-* vars. */
-  .quiz-scene {
-    position: absolute; inset: 0; display: none; overflow: hidden;
-    background: var(--q-bg, #101418); color: var(--q-ink, #EEF2F5);
-    opacity: 0; transition: opacity 0.35s ease; z-index: 10;
-    font-family: system-ui, "Helvetica Neue", Arial, sans-serif;
-  }
-  .quiz-scene.open { display: block; }
-  .quiz-scene.visible { opacity: 1; }
-  .qz-frame {
-    position: absolute;
-    display: flex; flex-direction: column; justify-content: center;
-    padding: 4.2em 5em; box-sizing: border-box;
-  }
-  .qz-deco {
-    position: absolute; right: -0.12em; bottom: -0.38em;
-    font-size: 15em; font-weight: 800; line-height: 1;
-    color: var(--q-accent-faint, rgba(255,255,255,0.05));
-    pointer-events: none; user-select: none;
-  }
-  .qz-rule { width: 3.2em; height: 0.22em; background: var(--q-accent, #22D3EE); border-radius: 0.11em; margin-bottom: 1.1em; }
-  .qz-eyebrow {
-    font-size: 0.62em; letter-spacing: 0.2em; text-transform: uppercase;
-    color: var(--q-accent, #22D3EE); font-weight: 700; margin-bottom: 0.9em;
-  }
-  .qz-q {
-    font-size: 1.55em; font-weight: 700; line-height: 1.25;
-    letter-spacing: -0.01em; max-width: 78%; margin-bottom: 1.1em;
-  }
-  .qz-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7em; max-width: 82%; }
-  /* true_false: two large verdict cards, no letter chips */
-  .qz-opts.tf { max-width: 56%; }
-  .qz-opts.tf .qz-opt { text-align: center; font-size: 1em; font-weight: 700; padding: 1.05em 1em; }
-  .qz-opts.tf .k { display: none; }
-  /* multi_select: cards toggle before a submit step */
-  .qz-opt.sel { border-color: var(--q-accent, #22D3EE); background: var(--q-accent-soft, rgba(34,211,238,0.12)); }
-  .qz-opt {
-    text-align: left; padding: 0.85em 1em;
-    background: var(--q-surface, #171C22); color: var(--q-ink, #EEF2F5);
-    border: 1.5px solid var(--q-line, rgba(0,0,0,0.14)); border-radius: 0.55em;
-    font-size: 0.82em; line-height: 1.35; cursor: pointer; font-family: inherit;
-    transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
-  }
-  .qz-opt .k { color: var(--q-accent, #22D3EE); font-weight: 700; margin-right: 0.55em; }
-  .qz-opt:hover:not(:disabled) { border-color: var(--q-accent, #22D3EE); transform: translateY(-2px); }
-  .qz-opt:disabled { cursor: default; }
-  /* Verdicts use fixed semantic colors — palettes with red/green accents
-     (swiss-grid, paper-mark) would otherwise make right and wrong identical. */
-  .qz-opt.correct { border-color: #10B981; background: rgba(16,185,129,0.12); }
-  .qz-opt.correct .k { color: #10B981; }
-  .qz-opt.wrong { border-color: #EF4444; background: rgba(239,68,68,0.1); }
-  .qz-opt.wrong .k { color: #EF4444; }
-  .qz-foot { display: flex; align-items: center; gap: 1.2em; margin-top: 1.2em; min-height: 2.4em; max-width: 82%; }
-  .qz-fb { font-size: 0.72em; line-height: 1.45; color: var(--q-muted, #8B98A5); flex: 1; }
-  .qz-go {
-    padding: 0.7em 1.6em; background: var(--q-accent, #22D3EE); color: var(--q-btn-ink, #08221a);
-    border: 0; border-radius: 2em; font-size: 0.78em; font-weight: 700; cursor: pointer;
-    font-family: inherit; display: none; white-space: nowrap;
-  }
-  .qz-go.show { display: inline-block; }
-  /* Staggered entrance — each element rises in like a designed reveal. */
-  .qz-anim { opacity: 0; transform: translateY(0.8em); transition: opacity 0.45s ease, transform 0.45s ease; }
-  .qz-anim.in { opacity: 1; transform: translateY(0); }
+${QUIZ_SCENE_CSS}
 </style>
 </head>
 <body>
@@ -231,20 +547,12 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     </div>
     <div class="status" id="status">connecting…</div>
     <div class="quiz-scene" id="qz">
-      <div class="qz-frame" id="qz-frame">
-        <div class="qz-deco">?</div>
-        <div class="qz-rule qz-anim"></div>
-        <div class="qz-eyebrow qz-anim" id="qz-eyebrow">Check your understanding</div>
-        <div class="qz-q qz-anim" id="qz-q"></div>
-        <div class="qz-opts" id="qz-opts"></div>
-        <div class="qz-foot">
-          <div class="qz-fb" id="qz-fb"></div>
-          <button class="qz-go" id="qz-submit">Submit</button>
-          <button class="qz-go" id="qz-go">Continue &#9656;</button>
-        </div>
-      </div>
+${QUIZ_SCENE_HTML}
     </div>
   </div>
+<script>
+${QUIZ_ENGINE_JS}
+</script>
 <script>
 (function() {
   var QUIZZES = ${quizJson};
@@ -365,22 +673,6 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
   });
 
   // ── Seamless quiz scene ─────────────────────────────────────
-  // Position the scene exactly over the video's rendered 16:9 content
-  // box (object-fit: contain leaves letterbox bars we must NOT cover),
-  // and scale all typography off the frame width so the layout matches
-  // the 1920×1080 design grid of the beats themselves.
-  function hexToRgba(hex, a) {
-    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
-    if (!m) return 'rgba(255,255,255,' + a + ')';
-    var n = parseInt(m[1], 16);
-    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
-  }
-  function isDark(hex) {
-    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
-    if (!m) return true;
-    var n = parseInt(m[1], 16);
-    return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) < 140;
-  }
   // The scene background covers the whole stage; the content frame sits
   // in the video's rendered 16:9 content box so layout proportions match
   // the beats exactly.
@@ -417,32 +709,6 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     if (overlay.classList.contains('open')) fitSceneToVideo();
   });
 
-  function applyPalette(style) {
-    var s = style || {};
-    var bg = s.bg || '#101418', ink = s.ink || '#EEF2F5', accent = s.accent || '#22D3EE';
-    overlay.style.setProperty('--q-bg', bg);
-    overlay.style.setProperty('--q-ink', ink);
-    overlay.style.setProperty('--q-muted', s.muted || '#8B98A5');
-    overlay.style.setProperty('--q-accent', accent);
-    overlay.style.setProperty('--q-surface', s.surface || (isDark(bg) ? 'rgba(255,255,255,0.07)' : '#FFFFFF'));
-    overlay.style.setProperty('--q-line', hexToRgba(ink, 0.16));
-    overlay.style.setProperty('--q-accent-soft', hexToRgba(accent, 0.13));
-    overlay.style.setProperty('--q-accent-faint', hexToRgba(accent, isDark(bg) ? 0.08 : 0.07));
-    overlay.style.setProperty('--q-btn-ink', isDark(accent) ? '#FFFFFF' : '#101418');
-  }
-
-  // Render "x^2" / "y^-9" with real superscripts — the videos typeset
-  // exponents properly, so the quiz must too or the takeover breaks.
-  // DOM-built (text nodes + <sup>), never innerHTML.
-  function renderRich(el, text) {
-    el.textContent = '';
-    var parts = String(text || '').split(/\\^(-?[0-9a-zA-Z]+)/);
-    for (var i = 0; i < parts.length; i++) {
-      if (i % 2 === 0) { el.appendChild(document.createTextNode(parts[i])); }
-      else { var s = document.createElement('sup'); s.textContent = parts[i]; el.appendChild(s); }
-    }
-  }
-
   function showQuiz(cue, idx) {
     asked[idx] = true;
     video.pause();
@@ -451,126 +717,27 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     // of it so the scene is actually visible when it opens.
     if (document.fullscreenElement === video) document.exitFullscreen().catch(function() {});
     if (video.webkitDisplayingFullscreen && video.webkitExitFullscreen) video.webkitExitFullscreen();
-    applyPalette(cue.style);
-    // ── Quiz style engine ─────────────────────────────────────
-    // Types follow H5P Interactive Video's proven data model,
-    // rendered in our palette scenes instead of their white cards:
-    //   multiple_choice — one right answer, instant verdict
-    //   true_false      — big statement, two verdict cards
-    //   multi_select    — check all that apply, explicit submit
-    var qtype = cue.quiz.type || 'multiple_choice';
-    if (qtype === 'true_false' && !(cue.quiz.options || []).length) {
-      cue.quiz.options = [{ id: 't', text: 'True' }, { id: 'f', text: 'False' }];
-    }
-    var EYEBROWS = {
-      multiple_choice: 'Check your understanding',
-      true_false: 'True or false?',
-      multi_select: 'Select all that apply'
-    };
-    document.getElementById('qz-eyebrow').textContent = EYEBROWS[qtype] || EYEBROWS.multiple_choice;
-    renderRich(document.getElementById('qz-q'), cue.quiz.question);
-    var fb = document.getElementById('qz-fb');
-    var go = document.getElementById('qz-go');
-    var submit = document.getElementById('qz-submit');
-    fb.textContent = '';
-    go.classList.remove('show');
-    submit.classList.remove('show');
-    var box = document.getElementById('qz-opts');
-    box.className = 'qz-opts' + (qtype === 'true_false' ? ' tf' : '');
-    box.innerHTML = '';
-    var answered = false;
-    var selected = {};
-    var letters = 'ABCDEFGH';
-
-    function settle(right, feedbackText) {
-      answered = true;
-      answeredCount++;
-      done[idx] = true;    // unlocks forward seeking past this cue
-      buildMarkers();      // marker flips to answered state
-      if (right) correctCount++;
-      renderRich(fb, feedbackText);
-      Array.prototype.forEach.call(box.children, function(el) { el.disabled = true; });
-      submit.classList.remove('show');
-      go.classList.add('show');
-    }
-
-    cue.quiz.options.forEach(function(opt, i) {
-      var b = document.createElement('button');
-      b.className = 'qz-opt qz-anim';
-      var k = document.createElement('span');
-      k.className = 'k';
-      k.textContent = letters.charAt(i);
-      var body = document.createElement('span');
-      renderRich(body, opt.text);
-      b.appendChild(k);
-      b.appendChild(body);
-      if (qtype === 'multi_select') {
-        b.onclick = function() {
-          if (answered) return;
-          selected[i] = !selected[i];
-          b.classList.toggle('sel', !!selected[i]);
-        };
-      }
-      else {
-        // multiple_choice and true_false: one click answers.
-        b.onclick = function() {
-          if (answered) return;
-          var right = !!opt.isCorrect;
-          b.classList.add(right ? 'correct' : 'wrong');
-          // Reveal the correct one when the learner missed it.
-          if (!right) {
-            Array.prototype.forEach.call(box.children, function(el, j) {
-              if (cue.quiz.options[j] && cue.quiz.options[j].isCorrect) el.classList.add('correct');
-            });
-          }
-          settle(right, opt.feedback || (right ? 'Correct.' : 'Not quite — the highlighted answer is correct.'));
-        };
-      }
-      box.appendChild(b);
-    });
-
-    if (qtype === 'multi_select') {
-      submit.classList.add('show');
-      submit.onclick = function() {
-        if (answered) return;
-        var any = false;
-        for (var i = 0; i < cue.quiz.options.length; i++) if (selected[i]) any = true;
-        if (!any) { fb.textContent = 'Select at least one answer.'; return; }
-        // Exact set match: every correct option selected, no wrong ones.
-        var right = cue.quiz.options.every(function(o, i) { return !!o.isCorrect === !!selected[i]; });
-        Array.prototype.forEach.call(box.children, function(el, i) {
-          var o = cue.quiz.options[i];
-          el.classList.remove('sel');
-          if (selected[i] && o.isCorrect) el.classList.add('correct');
-          else if (selected[i] && !o.isCorrect) el.classList.add('wrong');
-          else if (!selected[i] && o.isCorrect) el.classList.add('correct'); // reveal missed
-        });
-        settle(right, right
-          ? (cue.quiz.correctFeedback || 'Correct — you found them all.')
-          : (cue.quiz.wrongFeedback || 'Not quite — the full correct set is highlighted.'));
-      };
-    }
-    go.onclick = function() {
-      overlay.classList.remove('visible'); // crossfade back to the paused frame…
-      setTimeout(function() {
-        overlay.classList.remove('open');
-        video.play();                      // …then the video carries on.
-        pokeBar();
-      }, 360);
-    };
     fitSceneToVideo();
     bar.classList.add('hidden');
     clearTimeout(hideTimer);
-    overlay.classList.add('open');
-    // Crossfade in from the paused frame, then stagger the reveals —
-    // same rhythm as a designed beat, not a dialog popping open.
-    var anims = overlay.querySelectorAll('.qz-anim');
-    Array.prototype.forEach.call(anims, function(el) { el.classList.remove('in'); });
-    requestAnimationFrame(function() {
-      overlay.classList.add('visible');
-      Array.prototype.forEach.call(anims, function(el, i) {
-        setTimeout(function() { el.classList.add('in'); }, 380 + i * 110);
-      });
+    // The shared engine renders the scene + interactions; the player only
+    // does the video-side bookkeeping (score, seek gate, markers, resume).
+    window.__quizEngine.render(cue, {
+      overlay: overlay,
+      onSettle: function(right) {
+        answeredCount++;
+        done[idx] = true;    // unlocks forward seeking past this cue
+        buildMarkers();      // marker flips to answered state
+        if (right) correctCount++;
+      },
+      onContinue: function() {
+        overlay.classList.remove('visible'); // crossfade back to the paused frame…
+        setTimeout(function() {
+          overlay.classList.remove('open');
+          video.play();                      // …then the video carries on.
+          pokeBar();
+        }, 360);
+      }
     });
   }
 
@@ -616,6 +783,133 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
 `;
 }
 
+/**
+ * Standalone quiz style gallery — a single HTML file for viewing and
+ * evolving quiz styles WITHOUT a video. Same CSS + engine as the SCORM
+ * player, so what you approve here is exactly what ships in lessons.
+ * Chrome: style buttons + palette switcher + a fixed 16:9 stage.
+ */
+export function buildQuizStyleGallery(demos: Array<{ label: string; cue: ScormQuizCue }>): string {
+  const demosJson = JSON.stringify(demos).replace(/</g, "\\u003c");
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Quiz style gallery</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0e1013; color: #e7e9ec; font-family: system-ui, -apple-system, sans-serif; min-height: 100%; }
+  .chrome { max-width: 1240px; margin: 0 auto; padding: 22px 24px 40px; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  .sub { font-size: 12.5px; color: #8a919c; margin-bottom: 18px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .demo-btn {
+    padding: 8px 14px; border-radius: 8px; border: 1px solid #2a2f37; cursor: pointer;
+    background: #171a1f; color: #e7e9ec; font-size: 13px; font-family: inherit;
+  }
+  .demo-btn:hover { border-color: #4b5563; }
+  .demo-btn.active { border-color: #34D399; color: #34D399; }
+  select {
+    padding: 8px 10px; border-radius: 8px; border: 1px solid #2a2f37;
+    background: #171a1f; color: #e7e9ec; font-size: 13px; font-family: inherit; margin-left: auto;
+  }
+  .stage-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; border: 1px solid #2a2f37; background: #000; }
+  .hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 14px; }
+${QUIZ_SCENE_CSS}
+  .quiz-scene { z-index: 2; }
+  .qz-frame { inset: 0; }
+</style>
+</head>
+<body>
+  <div class="chrome">
+    <h1>Quiz style gallery</h1>
+    <div class="sub">Same engine + CSS the SCORM player ships — what you approve here is what learners see. Pick a style, switch palettes, answer right and wrong.</div>
+    <div class="row" id="demo-row"></div>
+    <div class="stage-wrap" id="stage">
+      <div class="hint" id="hint">Pick a quiz style above</div>
+      <div class="quiz-scene" id="qz">
+${QUIZ_SCENE_HTML}
+      </div>
+    </div>
+  </div>
+<script>
+${QUIZ_ENGINE_JS}
+</script>
+<script>
+(function() {
+  var DEMOS = ${demosJson};
+  var PALETTES = {
+    "swiss-grid":    { bg: "#FAFAF7", ink: "#111111", muted: "#6B6B66", accent: "#DC2626", surface: "#FFFFFF" },
+    "kinetic-pop":   { bg: "#F7F8FA", ink: "#0B1220", muted: "#5B6472", accent: "#2563EB", surface: "#FFFFFF" },
+    "warm-grain":    { bg: "#FBF6EE", ink: "#221A10", muted: "#7A6E5C", accent: "#D97706", surface: "#FFFDF8" },
+    "paper-mark":    { bg: "#F6F1E7", ink: "#1F1B14", muted: "#75705F", accent: "#166534", surface: "#FBF8F1" },
+    "magnetic-flow": { bg: "#F6F4FB", ink: "#17131F", muted: "#6E6880", accent: "#7C3AED", surface: "#FFFFFF" },
+    "liquid-glass":  { bg: "#0B1B2B", ink: "#F4F8FB", muted: "#93A7B8", accent: "#2DD4BF", surface: "rgba(255,255,255,0.07)" },
+    "neon-grid":     { bg: "#101418", ink: "#EEF2F5", muted: "#8B98A5", accent: "#22D3EE", surface: "#171C22" }
+  };
+  var stage = document.getElementById('stage');
+  var overlay = document.getElementById('qz');
+  var hint = document.getElementById('hint');
+  var row = document.getElementById('demo-row');
+  var current = -1;
+  var palette = 'swiss-grid';
+
+  function fit() {
+    overlay.style.fontSize = (stage.clientWidth / 42) + 'px';
+  }
+  window.addEventListener('resize', fit);
+
+  function open(i) {
+    current = i;
+    Array.prototype.forEach.call(row.querySelectorAll('.demo-btn'), function(b, j) {
+      b.classList.toggle('active', j === i);
+    });
+    hint.style.display = 'none';
+    fit();
+    // Deep-copy the cue so retakes start clean, then apply the chosen palette.
+    var cue = JSON.parse(JSON.stringify(DEMOS[i].cue));
+    cue.style = PALETTES[palette];
+    overlay.classList.remove('visible');
+    overlay.classList.remove('open');
+    setTimeout(function() {
+      window.__quizEngine.render(cue, {
+        overlay: overlay,
+        onSettle: function() {},
+        onContinue: function() {
+          overlay.classList.remove('visible');
+          setTimeout(function() {
+            overlay.classList.remove('open');
+            hint.style.display = 'flex';
+            hint.textContent = 'Answered — pick a style (or the same one) to run it again';
+          }, 360);
+        }
+      });
+    }, 60);
+  }
+
+  DEMOS.forEach(function(d, i) {
+    var b = document.createElement('button');
+    b.className = 'demo-btn';
+    b.textContent = d.label;
+    b.onclick = function() { open(i); };
+    row.appendChild(b);
+  });
+  var sel = document.createElement('select');
+  Object.keys(PALETTES).forEach(function(name) {
+    var o = document.createElement('option');
+    o.value = name; o.textContent = 'palette: ' + name;
+    sel.appendChild(o);
+  });
+  sel.onchange = function() { palette = sel.value; if (current >= 0) open(current); };
+  row.appendChild(sel);
+  fit();
+})();
+</script>
+</body>
+</html>
+`;
+}
+
 // The SCORM API wrapper — same content as packages/scorm-player/src/assets/scorm-api.js.
 // Duplicated here so scorm-packager is self-contained. If the player-side file
 // diverges, mirror the update here.
@@ -636,14 +930,30 @@ export interface ScormQuizCue {
   atSec: number;
   beatKey: string;
   quiz: {
-    /** "multiple_choice" (default) | "true_false" | "multi_select".
-     *  Types follow H5P Interactive Video's data model, rendered in our
-     *  palette scenes. Unknown types fall back to multiple_choice. */
+    /** "multiple_choice" (default) | "true_false" | "multi_select" |
+     *  "fill_in" | "hotspot". Types follow H5P Interactive Video's data
+     *  model, rendered in our palette scenes. Unknown types fall back to
+     *  multiple_choice. */
     type: string;
     question: string;
-    options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>;
-    /** Whole-question feedback for multi_select (per-option feedback
-     *  doesn't fit a set answer). Field names match @lp/shared QuizSpec. */
+    /** Overrides the type's default eyebrow label. */
+    eyebrow?: string;
+    /** hotspot only: the image that is the question canvas (URL or data URI). */
+    image?: string;
+    options: Array<{
+      id: string;
+      text: string;
+      isCorrect?: boolean;
+      feedback?: string;
+      /** fill_in: numeric accepted answer with percent tolerance. */
+      numericValue?: number;
+      numericTolerancePct?: number;
+      /** hotspot: clickable region in percent of the image. */
+      region?: { x: number; y: number; w: number; h: number };
+    }>;
+    /** Whole-question feedback (multi_select / fill_in / hotspot — per-option
+     *  feedback doesn't fit set/typed/spatial answers). Field names match
+     *  @lp/shared QuizSpec. */
     correctFeedback?: string;
     wrongFeedback?: string;
   };
