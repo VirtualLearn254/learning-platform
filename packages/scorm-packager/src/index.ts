@@ -107,19 +107,43 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .status {
-    position: absolute; bottom: 16px; right: 20px;
+    position: absolute; bottom: 58px; right: 20px;
     font-size: 12px; color: rgba(255,255,255,0.5);
     background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 6px;
     pointer-events: none;
   }
   .status.complete { color: #34D399; }
-  .fs-btn {
-    position: absolute; top: 14px; right: 18px; z-index: 5;
-    width: 38px; height: 38px; border: 0; border-radius: 8px; cursor: pointer;
-    background: rgba(0,0,0,0.45); color: rgba(255,255,255,0.75); font-size: 18px;
-    line-height: 1; display: flex; align-items: center; justify-content: center;
+  /* ── Custom control bar ──────────────────────────────────────
+     Native controls are replaced entirely: they can't host quiz
+     markers on the seekbar, they fight seek-gating, and their
+     fullscreen button fullscreens the bare <video> (hiding the
+     quiz). PlayPosit-style: markers show upcoming interactions,
+     forward seeking is clamped at the first unanswered quiz. */
+  .bar {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: flex; align-items: center; gap: 14px; padding: 18px 18px 12px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.72));
+    opacity: 1; transition: opacity 0.25s ease;
   }
-  .fs-btn:hover { background: rgba(0,0,0,0.65); color: #fff; }
+  .bar.hidden { opacity: 0; pointer-events: none; }
+  .cbtn {
+    background: none; border: 0; color: #fff; cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 6px; opacity: 0.85; min-width: 30px;
+  }
+  .cbtn:hover { opacity: 1; }
+  .ctime { font-size: 12px; color: rgba(255,255,255,0.85); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .track { position: relative; flex: 1; height: 22px; cursor: pointer; touch-action: none; }
+  .track::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 9.5px; height: 3px;
+    background: rgba(255,255,255,0.28); border-radius: 2px;
+  }
+  .track-fill { position: absolute; left: 0; top: 9.5px; height: 3px; background: #34D399; border-radius: 2px; width: 0; }
+  .qmark {
+    position: absolute; top: 6px; width: 10px; height: 10px; border-radius: 50%;
+    background: #0a0a0a; border: 2px solid #fff; box-sizing: border-box;
+    transform: translateX(-50%); pointer-events: none;
+  }
+  .qmark.done { background: #34D399; border-color: #34D399; }
   /* ── Quiz scene ──────────────────────────────────────────────
      Not a popup. A full-stage takeover in the same palette CSS vars
      the designer used for the beat — the background paints edge to
@@ -188,8 +212,17 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
 <body>
   <div class="stage">
     <div class="title-badge">${title}</div>
-    <video id="v" src="master.mp4" controls controlslist="nofullscreen" autoplay preload="metadata" playsinline></video>
-    <button class="fs-btn" id="fs" title="Fullscreen">&#x26F6;</button>
+    <video id="v" src="master.mp4" autoplay preload="metadata" playsinline></video>
+    <div class="bar" id="bar">
+      <button class="cbtn" id="c-play" title="Play/pause (space)">&#9654;</button>
+      <span class="ctime" id="c-time">0:00 / 0:00</span>
+      <div class="track" id="c-track">
+        <div class="track-fill" id="c-fill"></div>
+        <div id="c-marks"></div>
+      </div>
+      <button class="cbtn" id="c-mute" title="Mute">&#128266;</button>
+      <button class="cbtn" id="c-fs" title="Fullscreen (f)">&#x26F6;</button>
+    </div>
     <div class="status" id="status">connecting…</div>
     <div class="quiz-scene" id="qz">
       <div class="qz-frame" id="qz-frame">
@@ -215,10 +248,114 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
 
   var video = document.getElementById('v');
   var overlay = document.getElementById('qz');
+  var stage = document.querySelector('.stage');
   var completed = false;
   var asked = {};           // cue index -> true once shown
+  var done = {};            // cue index -> true once ANSWERED (gates seeking)
   var correctCount = 0;
   var answeredCount = 0;
+
+  // ── Custom controls: play/seek/time/mute/fullscreen ─────────
+  var bar = document.getElementById('bar');
+  var playBtn = document.getElementById('c-play');
+  var timeEl = document.getElementById('c-time');
+  var track = document.getElementById('c-track');
+  var fillEl = document.getElementById('c-fill');
+  var marksEl = document.getElementById('c-marks');
+  var muteBtn = document.getElementById('c-mute');
+
+  function fmt(s) {
+    s = Math.max(0, Math.floor(s || 0));
+    return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+  }
+  // Seek gate: forward seeking is clamped at the first UNANSWERED quiz cue
+  // (backward always free). Landing on the cue re-triggers the quiz on play.
+  function firstUnanswered() {
+    var m = Infinity;
+    for (var i = 0; i < QUIZZES.length; i++) {
+      if (!done[i] && QUIZZES[i].atSec < m) m = QUIZZES[i].atSec;
+    }
+    return m;
+  }
+  function gatedSeek(t) {
+    var lim = firstUnanswered();
+    if (lim !== Infinity && t > lim) t = lim;
+    video.currentTime = Math.max(0, Math.min(t, video.duration || t));
+  }
+  // Backstop for any seek path that bypasses gatedSeek.
+  video.addEventListener('seeking', function() {
+    var lim = firstUnanswered();
+    if (lim !== Infinity && video.currentTime > lim + 0.01) video.currentTime = lim;
+  });
+
+  function buildMarkers() {
+    if (!video.duration) return;
+    marksEl.innerHTML = '';
+    QUIZZES.forEach(function(c, i) {
+      var d = document.createElement('div');
+      d.className = 'qmark' + (done[i] ? ' done' : '');
+      d.style.left = (c.atSec / video.duration * 100) + '%';
+      d.title = 'Question' + (done[i] ? ' · answered' : '');
+      marksEl.appendChild(d);
+    });
+  }
+  video.addEventListener('loadedmetadata', buildMarkers);
+
+  function togglePlay() {
+    if (overlay.classList.contains('open')) return;
+    if (video.paused) video.play(); else video.pause();
+  }
+  playBtn.onclick = togglePlay;
+  video.addEventListener('click', togglePlay);
+  video.addEventListener('play', function() { playBtn.innerHTML = '&#10074;&#10074;'; pokeBar(); });
+  video.addEventListener('pause', function() { playBtn.innerHTML = '&#9654;'; bar.classList.remove('hidden'); clearTimeout(hideTimer); });
+
+  muteBtn.onclick = function() {
+    video.muted = !video.muted;
+    muteBtn.innerHTML = video.muted ? '&#128263;' : '&#128266;';
+  };
+
+  function trackSeek(e) {
+    var r = track.getBoundingClientRect();
+    var pct = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    gatedSeek(pct * (video.duration || 0));
+  }
+  track.addEventListener('pointerdown', function(e) {
+    if (overlay.classList.contains('open')) return;
+    trackSeek(e);
+    var mv = function(ev) { trackSeek(ev); };
+    var up = function() {
+      document.removeEventListener('pointermove', mv);
+      document.removeEventListener('pointerup', up);
+    };
+    document.addEventListener('pointermove', mv);
+    document.addEventListener('pointerup', up);
+  });
+
+  video.addEventListener('timeupdate', function() {
+    if (video.duration) fillEl.style.width = (video.currentTime / video.duration * 100) + '%';
+    timeEl.textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration);
+  });
+
+  // Auto-hide while playing; always visible when paused or quizzing ends.
+  var hideTimer = null;
+  function pokeBar() {
+    bar.classList.remove('hidden');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function() {
+      if (!video.paused && !overlay.classList.contains('open')) bar.classList.add('hidden');
+    }, 2600);
+  }
+  stage.addEventListener('mousemove', pokeBar);
+  stage.addEventListener('touchstart', pokeBar, { passive: true });
+
+  document.addEventListener('keydown', function(e) {
+    if (overlay.classList.contains('open')) return;
+    if (e.code === 'Space' || e.key === 'k') { e.preventDefault(); togglePlay(); }
+    else if (e.key === 'ArrowLeft') { gatedSeek(video.currentTime - 5); pokeBar(); }
+    else if (e.key === 'ArrowRight') { gatedSeek(video.currentTime + 5); pokeBar(); }
+    else if (e.key === 'f') { fsToggle(); }
+  });
 
   // ── Seamless quiz scene ─────────────────────────────────────
   // Position the scene exactly over the video's rendered 16:9 content
@@ -256,15 +393,14 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
 
   // ── Fullscreen: always fullscreen the STAGE, never the video element.
   // A fullscreened <video> renders nothing but itself, so the quiz scene
-  // would be invisible until the learner exits — the native fullscreen
-  // button is stripped (controlslist) and replaced with our own; any
-  // video-element fullscreen that slips through (Firefox ignores
-  // controlslist, double-click gestures) is redirected to the stage.
-  var stage = document.querySelector('.stage');
-  document.getElementById('fs').onclick = function() {
+  // would be invisible until the learner exits — controls are fully
+  // custom so the only fullscreen path is ours; any video-element
+  // fullscreen that still slips through is redirected to the stage.
+  function fsToggle() {
     if (document.fullscreenElement) { document.exitFullscreen(); }
     else if (stage.requestFullscreen) { stage.requestFullscreen(); }
-  };
+  }
+  document.getElementById('c-fs').onclick = fsToggle;
   document.addEventListener('fullscreenchange', function() {
     if (document.fullscreenElement === video) {
       document.exitFullscreen().then(function() {
@@ -332,6 +468,8 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
         if (answered) return;
         answered = true;
         answeredCount++;
+        done[idx] = true;    // unlocks forward seeking past this cue
+        buildMarkers();      // marker flips to answered state
         var right = !!opt.isCorrect;
         if (right) correctCount++;
         b.classList.add(right ? 'correct' : 'wrong');
@@ -352,9 +490,12 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
       setTimeout(function() {
         overlay.classList.remove('open');
         video.play();                      // …then the video carries on.
+        pokeBar();
       }, 360);
     };
     fitSceneToVideo();
+    bar.classList.add('hidden');
+    clearTimeout(hideTimer);
     overlay.classList.add('open');
     // Crossfade in from the paused frame, then stagger the reveals —
     // same rhythm as a designed beat, not a dialog popping open.

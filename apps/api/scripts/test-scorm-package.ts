@@ -71,7 +71,9 @@ async function main() {
     ["completion wired", html.includes("scorm.setStatus('completed')")],
     ["style palette survives round-trip", q?.style?.bg === "#F6F1E7" && q?.style?.accent === "#166534"],
     ["seamless scene (palette vars + frame fit)", html.includes("applyPalette(") && html.includes("fitSceneToVideo(") && html.includes("--q-bg")],
-    ["fullscreen owned by stage, not video", html.includes('controlslist="nofullscreen"') && html.includes("stage.requestFullscreen")],
+    ["fullscreen owned by stage, not video", !html.includes("<video id=\"v\" src=\"master.mp4\" controls") && html.includes("stage.requestFullscreen")],
+    ["seek gating at first unanswered quiz", html.includes("firstUnanswered(") && html.includes("gatedSeek(")],
+    ["quiz markers on seekbar", html.includes("buildMarkers(") && html.includes("qmark")],
   ];
   for (const [name, ok] of htmlChecks) {
     console.log(`3. player ${name}: ${ok ? "PASS" : "FAIL"}`);
