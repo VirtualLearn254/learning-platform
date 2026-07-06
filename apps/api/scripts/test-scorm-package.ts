@@ -103,6 +103,7 @@ async function main() {
     ["seek gating at first unanswered quiz", html.includes("firstUnanswered(") && html.includes("gatedSeek(")],
     ["quiz markers on seekbar", html.includes("buildMarkers(") && html.includes("qmark")],
     ["3 quiz types embedded", quizzes.length === 3 && quizzes[1]?.quiz?.type === "true_false" && quizzes[2]?.quiz?.type === "multi_select"],
+    ["gamification HUD + review screen", html.includes('id="hud"') && html.includes("showSummary(") && html.includes("sm-replay")],
     ["quiz style engine present", html.includes("'true_false'") && html.includes("'multi_select'") && html.includes("qz-submit")],
     ["multi_select set feedback survives", quizzes[2]?.quiz?.wrongFeedback?.includes("x^10") === true],
   ];

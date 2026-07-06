@@ -1716,6 +1716,76 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[], qui
     transform: translateX(-50%); pointer-events: none;
   }
   .qmark.done { background: #34D399; border-color: #34D399; }
+  /* ── Gamification HUD (LP-14, scouted from Genially's Interactive
+     Scoreboard): compact points chip, count-up ticks, pulse on change,
+     streak flame. Motivational layer only — SCORM score is unchanged. */
+  .hud {
+    position: absolute; top: 16px; right: 20px; z-index: 4; display: none;
+    align-items: baseline; gap: 8px; background: rgba(0,0,0,0.55); color: #fff;
+    padding: 8px 16px; border-radius: 999px; font-size: 15px; font-weight: 800;
+    font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.4, 1);
+  }
+  .hud.on { display: inline-flex; }
+  .hud.pulse { transform: scale(1.12); }
+  .hud .lbl { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.14em; }
+  .hud-streak { display: none; color: #FFC53D; font-size: 12px; }
+  .hud-streak.on { display: inline; }
+  .hud-plus {
+    position: absolute; right: 10px; top: 100%; margin-top: 4px;
+    font-size: 13px; font-weight: 800; color: #34D399;
+    opacity: 0; transform: translateY(-4px); transition: all 0.6s ease; pointer-events: none;
+  }
+  .hud-plus.fly { opacity: 1; transform: translateY(6px); }
+  /* ── End-of-lesson summary: palette-aware review screen (research
+     pattern #4) — score hero in an OUTLINED numeral box, per-question
+     rows that jump back to the teaching segment, replay as a first-class
+     action. */
+  .summary {
+    position: absolute; inset: 0; z-index: 9; display: none; overflow: hidden;
+    background: var(--q-bg, #101418); color: var(--q-ink, #EEF2F5);
+    opacity: 0; transition: opacity 0.4s ease;
+    font-family: system-ui, "Helvetica Neue", Arial, sans-serif;
+  }
+  .summary.open { display: block; }
+  .summary.visible { opacity: 1; }
+  .sm-frame {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    justify-content: center; justify-content: safe center;
+    padding: 3em 5em; box-sizing: border-box;
+  }
+  .sm-eyebrow {
+    font-size: 0.62em; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--q-accent, #22D3EE); font-weight: 700; margin-bottom: 0.7em;
+  }
+  .sm-hero { display: flex; align-items: center; gap: 1em; margin-bottom: 0.9em; }
+  .sm-pts {
+    font-size: 2.6em; font-weight: 800; line-height: 1.1; padding: 0.08em 0.35em;
+    border: 0.05em solid var(--q-ink, #EEF2F5); border-radius: 0.12em;
+    font-variant-numeric: tabular-nums;
+  }
+  .sm-pts .u { font-size: 0.32em; font-weight: 700; color: var(--q-muted, #8B98A5); margin-left: 0.3em; letter-spacing: 0.1em; }
+  .sm-sub { color: var(--q-muted, #8B98A5); font-size: 0.85em; line-height: 1.5; }
+  .sm-rows { display: flex; flex-direction: column; gap: 0.45em; margin-bottom: 1.1em; max-width: 78%; }
+  .sm-row {
+    display: flex; align-items: center; gap: 0.8em;
+    background: var(--q-surface, #171C22); border: 1.5px solid var(--q-line, rgba(0,0,0,0.14));
+    border-radius: 0.5em; padding: 0.55em 0.9em; font-size: 0.76em; cursor: pointer;
+    color: var(--q-ink, #EEF2F5); text-align: left; font-family: inherit;
+    transition: border-color 0.18s ease;
+  }
+  .sm-row:hover { border-color: var(--q-accent, #22D3EE); }
+  .sm-dot { width: 0.85em; height: 0.85em; border-radius: 50%; flex: none; }
+  .sm-dot.ok { background: #10B981; }
+  .sm-dot.no { background: #EF4444; }
+  .sm-row .rw { margin-left: auto; color: var(--q-accent, #22D3EE); font-weight: 700; white-space: nowrap; }
+  .sm-btns { display: flex; gap: 0.8em; }
+  .sm-btn {
+    padding: 0.65em 1.6em; border-radius: 2em; border: 0; cursor: pointer;
+    font-weight: 700; font-family: inherit; font-size: 0.8em;
+    background: var(--q-accent, #22D3EE); color: var(--q-btn-ink, #101418);
+  }
+  .sm-btn.ghost { background: transparent; border: 1.5px solid var(--q-line, rgba(255,255,255,0.2)); color: var(--q-ink, #EEF2F5); }
 ${QUIZ_SCENE_CSS}
 </style>
 ${skin}
@@ -1735,8 +1805,27 @@ ${skin}
       <button class="cbtn" id="c-fs" title="Fullscreen (f)">&#x26F6;</button>
     </div>
     <div class="status" id="status">connecting…</div>
+    <div class="hud" id="hud">
+      <span id="hud-pts">0</span><span class="lbl">pts</span>
+      <span class="hud-streak" id="hud-streak"></span>
+      <span class="hud-plus" id="hud-plus"></span>
+    </div>
     <div class="quiz-scene" id="qz">
 ${QUIZ_SCENE_HTML}
+    </div>
+    <div class="summary" id="sm">
+      <div class="sm-frame">
+        <div class="sm-eyebrow">Lesson complete</div>
+        <div class="sm-hero">
+          <div class="sm-pts"><span id="sm-pts">0</span><span class="u">PTS</span></div>
+          <div class="sm-sub" id="sm-sub"></div>
+        </div>
+        <div class="sm-rows" id="sm-rows"></div>
+        <div class="sm-btns">
+          <button class="sm-btn" id="sm-replay">&#8634; Replay lesson</button>
+          <button class="sm-btn ghost" id="sm-close">Close</button>
+        </div>
+      </div>
     </div>
   </div>
 <script>
@@ -1759,6 +1848,44 @@ ${QUIZ_ENGINE_JS}
   var attemptsUsed = {};    // cue index -> retries consumed (LP-12 adaptivity)
   var correctCount = 0;
   var answeredCount = 0;
+
+  // ── Gamification HUD (LP-14): motivational points layer. First-try
+  // correct = 100, correct after a rewatch = 50, streak bonus +25 while
+  // on a run of 2+. SCORM score stays correct/total — untouched.
+  var points = 0, streak = 0;
+  var results = {};         // cue index -> { right, pts }
+  var hud = document.getElementById('hud');
+  var hudPts = document.getElementById('hud-pts');
+  var hudStreak = document.getElementById('hud-streak');
+  var hudPlus = document.getElementById('hud-plus');
+  if (QUIZZES.length > 0) hud.classList.add('on');
+  function countUp(el, from, to) {
+    var t0 = null;
+    function step(t) {
+      if (!t0) t0 = t;
+      var k = Math.min(1, (t - t0) / 500);
+      el.textContent = String(Math.round(from + (to - from) * k));
+      if (k < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function award(idx, right) {
+    var usedRetry = (attemptsUsed[idx] || 0) > 0;
+    var pts = right ? (usedRetry ? 50 : 100) : 0;
+    if (right) { streak++; if (streak >= 2) pts += 25; } else { streak = 0; }
+    results[idx] = { right: right, pts: pts };
+    if (pts > 0) {
+      hudPlus.textContent = '+' + pts;
+      hudPlus.classList.add('fly');
+      setTimeout(function() { hudPlus.classList.remove('fly'); }, 750);
+    }
+    countUp(hudPts, points, points + pts);
+    points += pts;
+    hudStreak.textContent = '\\uD83D\\uDD25 \\u00D7' + streak;
+    hudStreak.classList.toggle('on', streak >= 2);
+    hud.classList.add('pulse');
+    setTimeout(function() { hud.classList.remove('pulse'); }, 250);
+  }
 
   // ── Custom controls: play/seek/time/mute/fullscreen ─────────
   var bar = document.getElementById('bar');
@@ -1935,6 +2062,7 @@ ${QUIZ_ENGINE_JS}
         done[idx] = true;    // unlocks forward seeking past this cue
         buildMarkers();      // marker flips to answered state
         if (right) correctCount++;
+        award(idx, right);
       },
       onContinue: function(advanceTo) {
         overlay.classList.remove('visible'); // crossfade back to the paused frame…
@@ -1961,21 +2089,98 @@ ${QUIZ_ENGINE_JS}
   }
 
   video.addEventListener('ended', function() {
-    if (completed) return;
-    completed = true;
     var pct = QUIZZES.length > 0 && answeredCount > 0
       ? Math.round((correctCount / QUIZZES.length) * 100)
       : 100; // plain video: watching to the end is full marks
-    if (connected) {
-      scorm.setStatus('completed');
-      scorm.setScore(0, 100, pct);
-      scorm.commit();
+    if (!completed) {
+      // SCORM commit fires once per run; the summary re-shows on every
+      // ending (review-jumps and rewinds land back here).
+      completed = true;
+      if (connected) {
+        scorm.setStatus('completed');
+        scorm.setScore(0, 100, pct);
+        scorm.commit();
+      }
+      status.textContent = QUIZZES.length > 0
+        ? 'complete · score ' + pct + '% (' + correctCount + '/' + QUIZZES.length + ') · ' + points + ' pts'
+        : 'complete';
+      status.classList.add('complete');
     }
-    status.textContent = QUIZZES.length > 0
-      ? 'complete · score ' + pct + '% (' + correctCount + '/' + QUIZZES.length + ')'
-      : 'complete';
-    status.classList.add('complete');
+    if (QUIZZES.length > 0) showSummary(pct);
   });
+
+  // ── End-of-lesson review screen (LP-14): total points as the hero,
+  // per-question verdicts, each row jumps back to its teaching segment.
+  var sm = document.getElementById('sm');
+  var TYPE_LABELS = {
+    multiple_choice: 'Choice', true_false: 'True/false', multi_select: 'Multi-select',
+    fill_in: 'Fill-in', hotspot: 'Hotspot', match: 'Match', ordering: 'Ordering',
+    sort_into: 'Sort', word_bank: 'Word bank', scenario: 'Scenario', likert: 'Poll',
+    flashcard: 'Flashcard', image_choice: 'Image choice', estimate: 'Estimate',
+    memory_pairs: 'Memory', this_or_that: 'Quick fire', word_search: 'Word search',
+    guess_concept: 'Guess'
+  };
+  function showSummary(pct) {
+    if (QUIZZES[0] && QUIZZES[0].style && window.__quizEngine.applyPalette) {
+      window.__quizEngine.applyPalette(sm, QUIZZES[0].style);
+    }
+    var W = video.clientWidth, H = video.clientHeight;
+    var ar = (video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 16 / 9;
+    sm.style.fontSize = (Math.min(W, H * ar) / 42) + 'px';
+    document.getElementById('sm-pts').textContent = String(points);
+    document.getElementById('sm-sub').textContent =
+      correctCount + ' of ' + QUIZZES.length + ' correct \\u00B7 ' + pct + '%';
+    var rows = document.getElementById('sm-rows');
+    rows.innerHTML = '';
+    QUIZZES.forEach(function(c, i) {
+      var row = document.createElement('button');
+      row.className = 'sm-row';
+      var dot = document.createElement('span');
+      dot.className = 'sm-dot ' + (results[i] && results[i].right ? 'ok' : 'no');
+      var txt = document.createElement('span');
+      txt.textContent = (TYPE_LABELS[c.quiz.type] || 'Question') + ' \\u00B7 ' +
+        String(c.quiz.question || '').slice(0, 56) + (String(c.quiz.question || '').length > 56 ? '\\u2026' : '');
+      var rw = document.createElement('span');
+      rw.className = 'rw';
+      rw.textContent = 'Rewatch \\u25B8';
+      row.appendChild(dot);
+      row.appendChild(txt);
+      row.appendChild(rw);
+      row.onclick = function() {
+        sm.classList.remove('visible');
+        setTimeout(function() {
+          sm.classList.remove('open');
+          video.currentTime = Math.max(0, c.retry ? c.retry.atSec : c.atSec - 15);
+          video.play();
+          pokeBar();
+        }, 300);
+      };
+      rows.appendChild(row);
+    });
+    bar.classList.add('hidden');
+    clearTimeout(hideTimer);
+    sm.classList.add('open');
+    requestAnimationFrame(function() { sm.classList.add('visible'); });
+  }
+  document.getElementById('sm-close').onclick = function() {
+    sm.classList.remove('visible');
+    setTimeout(function() { sm.classList.remove('open'); bar.classList.remove('hidden'); }, 300);
+  };
+  document.getElementById('sm-replay').onclick = function() {
+    // Full reset: fresh run, fresh score, markers hollow again.
+    asked = {}; done = {}; attemptsUsed = {}; results = {};
+    correctCount = 0; answeredCount = 0; points = 0; streak = 0; completed = false;
+    hudPts.textContent = '0';
+    hudStreak.classList.remove('on');
+    buildMarkers();
+    sm.classList.remove('visible');
+    setTimeout(function() {
+      sm.classList.remove('open');
+      video.currentTime = 0;
+      video.play();
+      pokeBar();
+    }, 300);
+  };
 
   window.addEventListener('beforeunload', function() {
     if (!connected) return;
