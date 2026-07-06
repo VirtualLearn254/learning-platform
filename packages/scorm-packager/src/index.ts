@@ -675,6 +675,10 @@ export interface ScormBuildOutput {
   zip: Buffer;
   sizeBytes: number;
   sha256: string;
+  /** The player page, also returned unzipped so callers can host a
+   *  shareable browser preview (rewrite src="master.mp4" to taste). */
+  playerHtml: string;
+  scormApiJs: string;
 }
 
 export interface ScormPackager {
@@ -686,9 +690,10 @@ export interface ScormPackager {
 export function createScormPackager(): ScormPackager {
   return {
     async build(input) {
+      const playerHtml = buildPlayerHtml(input.lesson, input.quizzes ?? []);
       const zip = new JSZip();
       zip.file("imsmanifest.xml", buildManifest(input.lesson, { organization: input.branding?.organizationName }));
-      zip.file("index.html", buildPlayerHtml(input.lesson, input.quizzes ?? []));
+      zip.file("index.html", playerHtml);
       zip.file("scorm-api.js", SCORM_API_JS);
       zip.file("master.mp4", input.masterMp4);
 
@@ -702,6 +707,8 @@ export function createScormPackager(): ScormPackager {
         zip: bytes,
         sizeBytes: bytes.length,
         sha256: createHash("sha256").update(bytes).digest("hex"),
+        playerHtml,
+        scormApiJs: SCORM_API_JS,
       };
     },
   };

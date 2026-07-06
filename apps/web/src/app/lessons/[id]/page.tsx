@@ -261,6 +261,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                     <Download className="w-3.5 h-3.5" /> Download MP4
                   </a>
                   {lesson.publishedAt && (<>
+                    <a href={`/api/files/lessons/${lesson.id}/preview/index.html`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Play className="w-3.5 h-3.5" /> Interactive preview</a>
                     <a href={`/api/files/${encodeURIComponent(`lessons/${lesson.id}/content.pdf`)}`} download className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Download className="w-3.5 h-3.5" /> Companion PDF</a>
                     <a href={`/api/files/${encodeURIComponent(`lessons/${lesson.id}/summary.pdf`)}`} download className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Download className="w-3.5 h-3.5" /> Answer key PDF</a>
                   </>)}

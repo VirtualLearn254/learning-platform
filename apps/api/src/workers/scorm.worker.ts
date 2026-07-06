@@ -113,6 +113,21 @@ export function startScormWorker() {
       await note(`uploading ${(built.sizeBytes / 1024 / 1024).toFixed(2)} MB zip · sha256=${built.sha256.slice(0, 12)}…`);
       await s3.putObject(zipKey, built.zip, { contentType: "application/zip" });
 
+      // Shareable interactive preview: the SAME player, hosted unzipped so a
+      // plain browser link plays the video with quizzes — no LMS required.
+      // The video src points at the existing master object (no duplication);
+      // scorm-api.js resolves relative to the preview folder. Without an LMS
+      // API present the player runs in standalone mode.
+      const previewHtml = built.playerHtml.replace(
+        'src="master.mp4"',
+        `src="/api/files/${lesson.masterMp4Key}"`,
+      );
+      await Promise.all([
+        s3.putObject(`lessons/${lessonId}/preview/index.html`, Buffer.from(previewHtml, "utf-8"), { contentType: "text/html; charset=utf-8" }),
+        s3.putObject(`lessons/${lessonId}/preview/scorm-api.js`, Buffer.from(built.scormApiJs, "utf-8"), { contentType: "application/javascript" }),
+      ]);
+      await note("interactive preview uploaded");
+
       // PDF companions: reading companion + instructor summary/answer key.
       // Best-effort — a PDF failure never blocks the SCORM publish.
       try {
