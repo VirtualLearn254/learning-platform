@@ -15,6 +15,7 @@ export const BloomLevelSchema = z.enum([
 
 export const QuizTypeSchema = z.enum([
   "multiple_choice", "match", "fill_in", "scenario", "likert",
+  "true_false", "multi_select",
 ]);
 
 export const QuizOptionSchema = z.object({

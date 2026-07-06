@@ -6,7 +6,7 @@
 
 export type BloomLevel = "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create";
 
-export type QuizType = "multiple_choice" | "match" | "fill_in" | "scenario" | "likert";
+export type QuizType = "multiple_choice" | "match" | "fill_in" | "scenario" | "likert" | "true_false" | "multi_select";
 
 export type BeatType = "hook" | "concept" | "example" | "check" | "recap";
 

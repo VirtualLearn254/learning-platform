@@ -546,8 +546,8 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
           else if (!selected[i] && o.isCorrect) el.classList.add('correct'); // reveal missed
         });
         settle(right, right
-          ? (cue.quiz.feedbackCorrect || 'Correct — you found them all.')
-          : (cue.quiz.feedbackWrong || 'Not quite — the full correct set is highlighted.'));
+          ? (cue.quiz.correctFeedback || 'Correct — you found them all.')
+          : (cue.quiz.wrongFeedback || 'Not quite — the full correct set is highlighted.'));
       };
     }
     go.onclick = function() {
@@ -643,9 +643,9 @@ export interface ScormQuizCue {
     question: string;
     options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>;
     /** Whole-question feedback for multi_select (per-option feedback
-     *  doesn't fit a set answer). */
-    feedbackCorrect?: string;
-    feedbackWrong?: string;
+     *  doesn't fit a set answer). Field names match @lp/shared QuizSpec. */
+    correctFeedback?: string;
+    wrongFeedback?: string;
   };
   /** The beat's style palette (same CSS vars the designer rendered the video
    *  with). When present, the quiz scene takes over the frame in these colors
