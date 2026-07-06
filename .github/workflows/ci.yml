@@ -21,6 +21,9 @@ jobs:
         run: npm run typecheck --workspace @lp/scorm-packager
       - name: Typecheck api
         run: npm run typecheck --workspace @lp/api
+      - name: Generate web docs module
+        working-directory: apps/web
+        run: npm run docs:build
       - name: Typecheck web
         working-directory: apps/web
         run: npx tsc --noEmit
