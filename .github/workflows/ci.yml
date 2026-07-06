@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck ai-provider
+        run: npm run typecheck --workspace @lp/ai-provider
+      - name: Typecheck scorm-packager
+        run: npm run typecheck --workspace @lp/scorm-packager
+      - name: Typecheck api
+        run: npm run typecheck --workspace @lp/api
+      - name: Typecheck web
+        working-directory: apps/web
+        run: npx tsc --noEmit
+      - name: Build web (production)
+        working-directory: apps/web
+        run: npm run build
