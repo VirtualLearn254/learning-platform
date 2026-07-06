@@ -32,6 +32,34 @@ async function main() {
         },
         style: { bg: "#F6F1E7", ink: "#1F1B14", muted: "#75705F", accent: "#166534", surface: "#FBF8F1" },
       },
+      {
+        atSec: 60,
+        beatKey: "tf_check",
+        quiz: {
+          type: "true_false",
+          question: "x^0 = 1 for every nonzero x.",
+          options: [
+            { id: "t", text: "True", isCorrect: true, feedback: "Any nonzero base to the power 0 is 1." },
+            { id: "f", text: "False", feedback: "The zero-exponent law: x^0 = 1 when x ≠ 0." },
+          ],
+        },
+      },
+      {
+        atSec: 90,
+        beatKey: "ms_check",
+        quiz: {
+          type: "multi_select",
+          question: "Which expressions equal x^6?",
+          options: [
+            { id: "a", text: "(x^2)^3", isCorrect: true },
+            { id: "b", text: "x^2 · x^4", isCorrect: true },
+            { id: "c", text: "x^2 + x^4" },
+            { id: "d", text: "x^12 / x^2" },
+          ],
+          feedbackCorrect: "Both power-of-power and product laws land on x^6.",
+          feedbackWrong: "Addition doesn't combine exponents, and x^12/x^2 = x^10.",
+        },
+      },
     ],
     branding: { organizationName: "Learning Platform" },
     version: "2004_4",
@@ -74,6 +102,9 @@ async function main() {
     ["fullscreen owned by stage, not video", !html.includes("<video id=\"v\" src=\"master.mp4\" controls") && html.includes("stage.requestFullscreen")],
     ["seek gating at first unanswered quiz", html.includes("firstUnanswered(") && html.includes("gatedSeek(")],
     ["quiz markers on seekbar", html.includes("buildMarkers(") && html.includes("qmark")],
+    ["3 quiz types embedded", quizzes.length === 3 && quizzes[1]?.quiz?.type === "true_false" && quizzes[2]?.quiz?.type === "multi_select"],
+    ["quiz style engine present", html.includes("'true_false'") && html.includes("'multi_select'") && html.includes("qz-submit")],
+    ["multi_select set feedback survives", quizzes[2]?.quiz?.feedbackWrong?.includes("x^10") === true],
   ];
   for (const [name, ok] of htmlChecks) {
     console.log(`3. player ${name}: ${ok ? "PASS" : "FAIL"}`);

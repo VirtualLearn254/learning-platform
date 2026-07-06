@@ -180,6 +180,12 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     letter-spacing: -0.01em; max-width: 78%; margin-bottom: 1.1em;
   }
   .qz-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7em; max-width: 82%; }
+  /* true_false: two large verdict cards, no letter chips */
+  .qz-opts.tf { max-width: 56%; }
+  .qz-opts.tf .qz-opt { text-align: center; font-size: 1em; font-weight: 700; padding: 1.05em 1em; }
+  .qz-opts.tf .k { display: none; }
+  /* multi_select: cards toggle before a submit step */
+  .qz-opt.sel { border-color: var(--q-accent, #22D3EE); background: var(--q-accent-soft, rgba(34,211,238,0.12)); }
   .qz-opt {
     text-align: left; padding: 0.85em 1em;
     background: var(--q-surface, #171C22); color: var(--q-ink, #EEF2F5);
@@ -228,11 +234,12 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
       <div class="qz-frame" id="qz-frame">
         <div class="qz-deco">?</div>
         <div class="qz-rule qz-anim"></div>
-        <div class="qz-eyebrow qz-anim">Check your understanding</div>
+        <div class="qz-eyebrow qz-anim" id="qz-eyebrow">Check your understanding</div>
         <div class="qz-q qz-anim" id="qz-q"></div>
         <div class="qz-opts" id="qz-opts"></div>
         <div class="qz-foot">
           <div class="qz-fb" id="qz-fb"></div>
+          <button class="qz-go" id="qz-submit">Submit</button>
           <button class="qz-go" id="qz-go">Continue &#9656;</button>
         </div>
       </div>
@@ -445,15 +452,48 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
     if (document.fullscreenElement === video) document.exitFullscreen().catch(function() {});
     if (video.webkitDisplayingFullscreen && video.webkitExitFullscreen) video.webkitExitFullscreen();
     applyPalette(cue.style);
+    // ── Quiz style engine ─────────────────────────────────────
+    // Types follow H5P Interactive Video's proven data model,
+    // rendered in our palette scenes instead of their white cards:
+    //   multiple_choice — one right answer, instant verdict
+    //   true_false      — big statement, two verdict cards
+    //   multi_select    — check all that apply, explicit submit
+    var qtype = cue.quiz.type || 'multiple_choice';
+    if (qtype === 'true_false' && !(cue.quiz.options || []).length) {
+      cue.quiz.options = [{ id: 't', text: 'True' }, { id: 'f', text: 'False' }];
+    }
+    var EYEBROWS = {
+      multiple_choice: 'Check your understanding',
+      true_false: 'True or false?',
+      multi_select: 'Select all that apply'
+    };
+    document.getElementById('qz-eyebrow').textContent = EYEBROWS[qtype] || EYEBROWS.multiple_choice;
     renderRich(document.getElementById('qz-q'), cue.quiz.question);
     var fb = document.getElementById('qz-fb');
     var go = document.getElementById('qz-go');
+    var submit = document.getElementById('qz-submit');
     fb.textContent = '';
     go.classList.remove('show');
+    submit.classList.remove('show');
     var box = document.getElementById('qz-opts');
+    box.className = 'qz-opts' + (qtype === 'true_false' ? ' tf' : '');
     box.innerHTML = '';
     var answered = false;
+    var selected = {};
     var letters = 'ABCDEFGH';
+
+    function settle(right, feedbackText) {
+      answered = true;
+      answeredCount++;
+      done[idx] = true;    // unlocks forward seeking past this cue
+      buildMarkers();      // marker flips to answered state
+      if (right) correctCount++;
+      renderRich(fb, feedbackText);
+      Array.prototype.forEach.call(box.children, function(el) { el.disabled = true; });
+      submit.classList.remove('show');
+      go.classList.add('show');
+    }
+
     cue.quiz.options.forEach(function(opt, i) {
       var b = document.createElement('button');
       b.className = 'qz-opt qz-anim';
@@ -464,27 +504,52 @@ function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[]): st
       renderRich(body, opt.text);
       b.appendChild(k);
       b.appendChild(body);
-      b.onclick = function() {
-        if (answered) return;
-        answered = true;
-        answeredCount++;
-        done[idx] = true;    // unlocks forward seeking past this cue
-        buildMarkers();      // marker flips to answered state
-        var right = !!opt.isCorrect;
-        if (right) correctCount++;
-        b.classList.add(right ? 'correct' : 'wrong');
-        // Reveal the correct one when the learner missed it.
-        if (!right) {
-          Array.prototype.forEach.call(box.children, function(el, j) {
-            if (cue.quiz.options[j] && cue.quiz.options[j].isCorrect) el.classList.add('correct');
-          });
-        }
-        renderRich(fb, opt.feedback || (right ? 'Correct.' : 'Not quite — the highlighted answer is correct.'));
-        Array.prototype.forEach.call(box.children, function(el) { el.disabled = true; });
-        go.classList.add('show');
-      };
+      if (qtype === 'multi_select') {
+        b.onclick = function() {
+          if (answered) return;
+          selected[i] = !selected[i];
+          b.classList.toggle('sel', !!selected[i]);
+        };
+      }
+      else {
+        // multiple_choice and true_false: one click answers.
+        b.onclick = function() {
+          if (answered) return;
+          var right = !!opt.isCorrect;
+          b.classList.add(right ? 'correct' : 'wrong');
+          // Reveal the correct one when the learner missed it.
+          if (!right) {
+            Array.prototype.forEach.call(box.children, function(el, j) {
+              if (cue.quiz.options[j] && cue.quiz.options[j].isCorrect) el.classList.add('correct');
+            });
+          }
+          settle(right, opt.feedback || (right ? 'Correct.' : 'Not quite — the highlighted answer is correct.'));
+        };
+      }
       box.appendChild(b);
     });
+
+    if (qtype === 'multi_select') {
+      submit.classList.add('show');
+      submit.onclick = function() {
+        if (answered) return;
+        var any = false;
+        for (var i = 0; i < cue.quiz.options.length; i++) if (selected[i]) any = true;
+        if (!any) { fb.textContent = 'Select at least one answer.'; return; }
+        // Exact set match: every correct option selected, no wrong ones.
+        var right = cue.quiz.options.every(function(o, i) { return !!o.isCorrect === !!selected[i]; });
+        Array.prototype.forEach.call(box.children, function(el, i) {
+          var o = cue.quiz.options[i];
+          el.classList.remove('sel');
+          if (selected[i] && o.isCorrect) el.classList.add('correct');
+          else if (selected[i] && !o.isCorrect) el.classList.add('wrong');
+          else if (!selected[i] && o.isCorrect) el.classList.add('correct'); // reveal missed
+        });
+        settle(right, right
+          ? (cue.quiz.feedbackCorrect || 'Correct — you found them all.')
+          : (cue.quiz.feedbackWrong || 'Not quite — the full correct set is highlighted.'));
+      };
+    }
     go.onclick = function() {
       overlay.classList.remove('visible'); // crossfade back to the paused frame…
       setTimeout(function() {
@@ -571,9 +636,16 @@ export interface ScormQuizCue {
   atSec: number;
   beatKey: string;
   quiz: {
+    /** "multiple_choice" (default) | "true_false" | "multi_select".
+     *  Types follow H5P Interactive Video's data model, rendered in our
+     *  palette scenes. Unknown types fall back to multiple_choice. */
     type: string;
     question: string;
     options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>;
+    /** Whole-question feedback for multi_select (per-option feedback
+     *  doesn't fit a set answer). */
+    feedbackCorrect?: string;
+    feedbackWrong?: string;
   };
   /** The beat's style palette (same CSS vars the designer rendered the video
    *  with). When present, the quiz scene takes over the frame in these colors

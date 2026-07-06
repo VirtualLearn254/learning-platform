@@ -76,17 +76,23 @@ export function startScormWorker() {
       // the video it interrupts — seamless takeover, not a popup.
       const lessonStyle = (lesson.styleHints ?? null) as { style?: string } | null;
       const mainBeats = beats.filter((b) => !b.isAlt);
-      const quizzes: Array<{ atSec: number; beatKey: string; quiz: { type: string; question: string; options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> }; style: ReturnType<typeof getStylePalette> }> = [];
+      const quizzes: Array<{ atSec: number; beatKey: string; quiz: { type: string; question: string; options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>; feedbackCorrect?: string; feedbackWrong?: string }; style: ReturnType<typeof getStylePalette> }> = [];
       let offset = 0;
       for (const b of mainBeats) {
         const dur = b.durationSeconds ?? 0;
-        const quiz = b.quiz as { type?: string; question?: string; options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }> } | null;
+        const quiz = b.quiz as { type?: string; question?: string; options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>; feedbackCorrect?: string; feedbackWrong?: string } | null;
         if (quiz?.question && Array.isArray(quiz.options) && quiz.options.length >= 2) {
           const vis = (b.visualSpec ?? {}) as { style?: string };
           quizzes.push({
             atSec: Math.max(0, offset + dur - 0.4),
             beatKey: b.beatKey,
-            quiz: { type: quiz.type ?? "multiple_choice", question: quiz.question, options: quiz.options },
+            quiz: {
+              type: quiz.type ?? "multiple_choice",
+              question: quiz.question,
+              options: quiz.options,
+              feedbackCorrect: quiz.feedbackCorrect,
+              feedbackWrong: quiz.feedbackWrong,
+            },
             style: getStylePalette(vis.style ?? lessonStyle?.style),
           });
         }
