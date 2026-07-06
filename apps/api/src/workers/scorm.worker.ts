@@ -78,13 +78,47 @@ export function startScormWorker() {
       // the video it interrupts — seamless takeover, not a popup.
       const lessonStyle = (lesson.styleHints ?? null) as { style?: string } | null;
       const mainBeats = beats.filter((b) => !b.isAlt);
-      const quizzes: Array<{ atSec: number; beatKey: string; quiz: { type: string; question: string; options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>; correctFeedback?: string; wrongFeedback?: string }; style: ReturnType<typeof getStylePalette> }> = [];
+      // Beat-key → master-video start second, for adaptivity targets.
+      const beatStart: Record<string, number> = {};
+      {
+        let acc = 0;
+        for (const b of mainBeats) {
+          beatStart[b.beatKey] = acc;
+          acc += b.durationSeconds ?? 0;
+        }
+      }
+      type QuizAdaptivity = {
+        wrong?: { rewatchBeatKey?: string; seekToSec?: number; message?: string; maxAttempts?: number; allowOptOut?: boolean };
+        correct?: { skipToBeatKey?: string; seekToSec?: number; seekLabel?: string };
+      };
+      const quizzes: Array<{
+        atSec: number; beatKey: string;
+        quiz: { type: string; question: string; options: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>; correctFeedback?: string; wrongFeedback?: string };
+        style: ReturnType<typeof getStylePalette>;
+        retry?: { atSec: number; message?: string; maxAttempts: number; allowOptOut: boolean };
+        advance?: { atSec: number; label?: string };
+      }> = [];
       let offset = 0;
       for (const b of mainBeats) {
         const dur = b.durationSeconds ?? 0;
-        const quiz = b.quiz as { type?: string; question?: string; options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>; correctFeedback?: string; wrongFeedback?: string } | null;
+        const quiz = b.quiz as { type?: string; question?: string; options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>; correctFeedback?: string; wrongFeedback?: string; adaptivity?: QuizAdaptivity } | null;
         if (quiz?.question && Array.isArray(quiz.options) && quiz.options.length >= 2) {
           const vis = (b.visualSpec ?? {}) as { style?: string };
+          // Adaptivity (LP-12): wrong → rewatch & retry. Default with ZERO
+          // authoring: rewind to the start of the quiz's own beat (the
+          // narration that poses the question), one retry, opt-out allowed.
+          const ad = quiz.adaptivity;
+          const retryAt = ad?.wrong?.seekToSec
+            ?? (ad?.wrong?.rewatchBeatKey ? beatStart[ad.wrong.rewatchBeatKey] : undefined)
+            ?? offset; // own beat start
+          const retry = {
+            atSec: Math.max(0, retryAt),
+            message: ad?.wrong?.message,
+            maxAttempts: ad?.wrong?.maxAttempts ?? 1,
+            allowOptOut: ad?.wrong?.allowOptOut ?? true,
+          };
+          const advanceAt = ad?.correct?.seekToSec
+            ?? (ad?.correct?.skipToBeatKey ? beatStart[ad.correct.skipToBeatKey] : undefined);
           quizzes.push({
             atSec: Math.max(0, offset + dur - 0.4),
             beatKey: b.beatKey,
@@ -96,6 +130,8 @@ export function startScormWorker() {
               wrongFeedback: quiz.wrongFeedback,
             },
             style: getStylePalette(vis.style ?? lessonStyle?.style),
+            ...(retry.maxAttempts > 0 ? { retry } : {}),
+            ...(advanceAt != null ? { advance: { atSec: advanceAt, label: ad?.correct?.seekLabel } } : {}),
           });
         }
         offset += dur;

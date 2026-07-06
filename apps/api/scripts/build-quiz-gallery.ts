@@ -48,6 +48,9 @@ const DEMOS = [
     label: "multiple choice",
     cue: {
       atSec: 0, beatKey: "demo_mc",
+      // LP-12 adaptivity demo: wrong → "Rewatch & try again" (simulated
+      // re-present in the gallery; rewinds the video in real lessons).
+      retry: { atSec: 0, message: "Not quite — rewatch how the square distributes over the product, then try again.", maxAttempts: 1, allowOptOut: true },
       quiz: {
         type: "multiple_choice",
         question: "Simplify (x^3 · y^-2)^2 ÷ (x^4 · y^5), leaving positive exponents only.",

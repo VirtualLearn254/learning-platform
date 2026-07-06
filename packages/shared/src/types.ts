@@ -119,12 +119,30 @@ export interface VisualSpec {
   callouts?: string[];
 }
 
+/** H5P-style adaptivity: what happens after an answer. Targets are beat
+ *  keys (resolved to master-video seconds at publish) or raw seconds. */
+export interface QuizAdaptivity {
+  wrong?: {
+    rewatchBeatKey?: string;
+    seekToSec?: number;
+    message?: string;
+    maxAttempts?: number;
+    allowOptOut?: boolean;
+  };
+  correct?: {
+    skipToBeatKey?: string;
+    seekToSec?: number;
+    seekLabel?: string;
+  };
+}
+
 export interface QuizSpec {
   type: QuizType;
   question: string;
   eyebrow?: string;
   /** Overrides the type's default one-line usage hint. */
   instructions?: string;
+  adaptivity?: QuizAdaptivity;
   bloomLevel?: BloomLevel;
   /** hotspot: the image that is the question canvas (URL or data URI). */
   image?: string;

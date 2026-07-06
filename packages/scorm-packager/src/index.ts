@@ -399,6 +399,9 @@ const QUIZ_SCENE_CSS = `
      Skins may restyle the shown button (including its display mode) but
      can never force a hidden one visible. */
   .qz-go:not(.show) { display: none !important; }
+  /* Retry (rewatch & try again) reads as the remediation path — filled
+     like a primary action; the opt-out Continue sits beside it. */
+  .qz-retry { background: var(--q-ink, #EEF2F5); color: var(--q-bg, #101418); }
   /* After settling, every custom interactive surface goes inert. */
   .qz-opts.settled, .qz-opts.settled * { pointer-events: none; cursor: default; }
   /* Staggered entrance — each element rises in like a designed reveal.
@@ -420,6 +423,7 @@ const QUIZ_SCENE_HTML = `
         <div class="qz-foot">
           <div class="qz-fb" id="qz-fb"></div>
           <button class="qz-go" id="qz-submit">Submit</button>
+          <button class="qz-go qz-retry" id="qz-retry">&#8634; Rewatch &amp; try again</button>
           <button class="qz-go" id="qz-go">Continue &#9656;</button>
         </div>
       </div>
@@ -640,10 +644,16 @@ window.__quizEngine = (function() {
     // word_bank builds the question INTO the sentence; scenario puts it in
     // the situation panel; flashcard puts it on the card front.
     q('#qz-q').style.display = (qtype === 'word_bank' || qtype === 'scenario' || qtype === 'flashcard') ? 'none' : '';
-    var fb = q('#qz-fb'), go = q('#qz-go'), submit = q('#qz-submit');
+    var fb = q('#qz-fb'), go = q('#qz-go'), submit = q('#qz-submit'), retryBtn = q('#qz-retry');
     fb.textContent = '';
     go.classList.remove('show');
+    go.textContent = 'Continue \\u25B8';
     submit.classList.remove('show');
+    retryBtn.classList.remove('show');
+    // Adaptivity (LP-12): while retries remain, a wrong answer offers
+    // "rewatch & try again" and the correct answer is NOT revealed.
+    var canRetry = !!(cue.retry && ctx.retryState && ctx.retryState.attemptsLeft > 0 && ctx.onRetry);
+    var settledRight = false;
     var box = q('#qz-opts');
     box.className = 'qz-opts' + (LAYOUTS[qtype] ? ' ' + LAYOUTS[qtype] : '');
     box.innerHTML = '';
@@ -658,12 +668,35 @@ window.__quizEngine = (function() {
     var selected = {};
     var letters = 'ABCDEFGH';
 
-    function settle(right, feedbackText) {
-      answered = true;
-      renderRich(fb, feedbackText);
+    function lockInputs() {
       Array.prototype.forEach.call(box.querySelectorAll('button, input'), function(el) { el.disabled = true; });
       box.classList.add('settled');
       submit.classList.remove('show');
+    }
+    function settle(right, feedbackText) {
+      if (!right && canRetry) {
+        // Remediation branch: no reveal, no per-option feedback that could
+        // leak the answer — rewatch the segment and answer again.
+        answered = true;
+        renderRich(fb, (cue.retry.message || 'Not quite \\u2014 rewatch that part and take another shot.'));
+        lockInputs();
+        retryBtn.classList.add('show');
+        retryBtn.onclick = function() { ctx.onRetry(); };
+        if (cue.retry.allowOptOut !== false) {
+          go.textContent = 'Continue anyway \\u25B8';
+          go.classList.add('show');
+          go.onclick = function() { ctx.onSettle(false); ctx.onContinue(); };
+        }
+        return;
+      }
+      answered = true;
+      settledRight = right;
+      renderRich(fb, feedbackText);
+      lockInputs();
+      retryBtn.classList.remove('show');
+      if (right && cue.advance && cue.advance.atSec != null) {
+        go.textContent = (cue.advance.label || 'Skip ahead') + ' \\u25B8';
+      }
       go.classList.add('show');
       ctx.onSettle(right);
     }
@@ -717,7 +750,7 @@ window.__quizEngine = (function() {
         }
         var right = !!hit;
         input.classList.add(right ? 'correct' : 'wrong');
-        if (!right && accepted.length) {
+        if (!right && !canRetry && accepted.length) {
           var chip = document.createElement('span');
           chip.className = 'qz-answer-chip';
           var kk = document.createElement('span');
@@ -764,7 +797,7 @@ window.__quizEngine = (function() {
         dot.style.left = px + '%';
         dot.style.top = py + '%';
         wrap.appendChild(dot);
-        if (!right) {
+        if (!right && !canRetry) {
           // Reveal every correct region so the learner sees what they missed.
           (cue.quiz.options || []).forEach(function(o) {
             if (o.isCorrect && o.region) {
@@ -857,7 +890,7 @@ window.__quizEngine = (function() {
           termEls[li].classList.add(ok ? 'correct' : 'wrong');
           if (!ok) {
             right = false;
-            var correctR = rights.filter(function(r) { return r.id === l.matchTargetId; })[0];
+            var correctR = canRetry ? null : rights.filter(function(r) { return r.id === l.matchTargetId; })[0];
             if (correctR) {
               var fix = document.createElement('span');
               fix.className = 'fix';
@@ -1070,7 +1103,7 @@ window.__quizEngine = (function() {
           var ok = slots[si] && answers[si] && slots[si].id === answers[si].id;
           slot.classList.add(ok ? 'correct' : 'wrong');
           if (!ok) right = false;
-          if (!ok && answers[si]) renderRich(slot, answers[si].text); // reveal
+          if (!ok && !canRetry && answers[si]) renderRich(slot, answers[si].text); // reveal
         });
         settle(right, right
           ? (cue.quiz.correctFeedback || 'Exactly right.')
@@ -1090,7 +1123,7 @@ window.__quizEngine = (function() {
           if (answered) return;
           var right = !!opt.isCorrect;
           b.classList.add(right ? 'correct' : 'wrong');
-          if (!right) {
+          if (!right && !canRetry) {
             Array.prototype.forEach.call(actions.children, function(el, j) {
               if (cue.quiz.options[j] && cue.quiz.options[j].isCorrect) el.classList.add('correct');
             });
@@ -1199,8 +1232,10 @@ window.__quizEngine = (function() {
         var tol = Math.abs(eAns.numericValue) * ((eAns.numericTolerancePct || 0) / 100) + 1e-9;
         var right = Math.abs(v - eAns.numericValue) <= tol;
         vEl.style.color = right ? '#10B981' : '#EF4444';
-        reveal.textContent = 'Answer: ' + fmtV(eAns.numericValue);
-        reveal.style.display = 'block';
+        if (right || !canRetry) {
+          reveal.textContent = 'Answer: ' + fmtV(eAns.numericValue);
+          reveal.style.display = 'block';
+        }
         settle(right, (eAns.feedback) || (right
           ? (cue.quiz.correctFeedback || 'Close enough \\u2014 great estimate.')
           : (cue.quiz.wrongFeedback || 'The actual value is revealed below the slider.')));
@@ -1539,7 +1574,7 @@ window.__quizEngine = (function() {
             if (answered) return;
             var right = !!opt.isCorrect;
             b.classList.add(right ? 'correct' : 'wrong');
-            if (!right) {
+            if (!right && !canRetry) {
               Array.prototype.forEach.call(box.children, function(el, j) {
                 if (cue.quiz.options[j] && cue.quiz.options[j].isCorrect) el.classList.add('correct');
               });
@@ -1560,6 +1595,7 @@ window.__quizEngine = (function() {
           Array.prototype.forEach.call(box.children, function(el, i) {
             var o = cue.quiz.options[i];
             el.classList.remove('sel');
+            if (!right && canRetry) return; // no verdicts leaked while retries remain
             if (selected[i] && o.isCorrect) el.classList.add('correct');
             else if (selected[i] && !o.isCorrect) el.classList.add('wrong');
             else if (!selected[i] && o.isCorrect) el.classList.add('correct'); // reveal missed
@@ -1571,7 +1607,9 @@ window.__quizEngine = (function() {
       }
     }
 
-    go.onclick = function() { ctx.onContinue(); };
+    go.onclick = function() {
+      ctx.onContinue(settledRight && cue.advance && cue.advance.atSec != null ? cue.advance.atSec : undefined);
+    };
     // Crossfade in, then stagger the reveals — same rhythm as a designed
     // beat, not a dialog popping open.
     overlay.classList.add('open');
@@ -1715,6 +1753,7 @@ ${QUIZ_ENGINE_JS}
   var completed = false;
   var asked = {};           // cue index -> true once shown
   var done = {};            // cue index -> true once ANSWERED (gates seeking)
+  var attemptsUsed = {};    // cue index -> retries consumed (LP-12 adaptivity)
   var correctCount = 0;
   var answeredCount = 0;
 
@@ -1872,16 +1911,33 @@ ${QUIZ_ENGINE_JS}
     // does the video-side bookkeeping (score, seek gate, markers, resume).
     window.__quizEngine.render(cue, {
       overlay: overlay,
+      // Adaptivity (LP-12): while retries remain, wrong answers can rewind
+      // to the teaching segment; the cue re-fires when playback reaches it
+      // again (asked[] reset). The seek gate still holds — the question
+      // stays unanswered, so it cannot be skipped.
+      retryState: cue.retry ? { attemptsLeft: (cue.retry.maxAttempts != null ? cue.retry.maxAttempts : 1) - (attemptsUsed[idx] || 0) } : null,
+      onRetry: function() {
+        attemptsUsed[idx] = (attemptsUsed[idx] || 0) + 1;
+        asked[idx] = false;
+        overlay.classList.remove('visible');
+        setTimeout(function() {
+          overlay.classList.remove('open');
+          video.currentTime = Math.max(0, cue.retry.atSec);
+          video.play();
+          pokeBar();
+        }, 360);
+      },
       onSettle: function(right) {
         answeredCount++;
         done[idx] = true;    // unlocks forward seeking past this cue
         buildMarkers();      // marker flips to answered state
         if (right) correctCount++;
       },
-      onContinue: function() {
+      onContinue: function(advanceTo) {
         overlay.classList.remove('visible'); // crossfade back to the paused frame…
         setTimeout(function() {
           overlay.classList.remove('open');
+          if (advanceTo != null) gatedSeek(advanceTo); // correct-answer skip-ahead
           video.play();                      // …then the video carries on.
           pokeBar();
         }, 360);
@@ -2056,22 +2112,33 @@ ${QUIZ_ENGINE_JS}
     // Deep-copy the cue so retakes start clean, then apply the chosen palette.
     var cue = JSON.parse(JSON.stringify(DEMOS[i].cue));
     cue.style = PALETTES[palette];
-    overlay.classList.remove('visible');
-    overlay.classList.remove('open');
-    setTimeout(function() {
-      window.__quizEngine.render(cue, {
-        overlay: overlay,
-        onSettle: function() {},
-        onContinue: function() {
-          overlay.classList.remove('visible');
-          setTimeout(function() {
-            overlay.classList.remove('open');
-            hint.style.display = 'flex';
-            hint.textContent = 'Answered — pick a style (or the same one) to run it again';
-          }, 360);
-        }
-      });
-    }, 60);
+    // Simulated adaptivity: no video here, so "rewatch & retry" simply
+    // re-presents the question with one fewer attempt.
+    var attemptsLeft = cue.retry ? (cue.retry.maxAttempts != null ? cue.retry.maxAttempts : 1) : 0;
+    function present() {
+      overlay.classList.remove('visible');
+      overlay.classList.remove('open');
+      setTimeout(function() {
+        window.__quizEngine.render(cue, {
+          overlay: overlay,
+          retryState: cue.retry ? { attemptsLeft: attemptsLeft } : null,
+          onRetry: function() {
+            attemptsLeft--;
+            present();
+          },
+          onSettle: function() {},
+          onContinue: function() {
+            overlay.classList.remove('visible');
+            setTimeout(function() {
+              overlay.classList.remove('open');
+              hint.style.display = 'flex';
+              hint.textContent = 'Answered — pick a style (or the same one) to run it again';
+            }, 360);
+          }
+        });
+      }, 60);
+    }
+    present();
   }
 
   DEMOS.forEach(function(d, i) {
@@ -2155,6 +2222,13 @@ export interface ScormQuizCue {
    *  with). When present, the quiz scene takes over the frame in these colors
    *  so it reads as the next sub-scene of the video. Omitted = neutral dark. */
   style?: { bg: string; ink: string; muted: string; accent: string; surface: string };
+  /** Adaptivity (LP-12), resolved to master-video seconds at publish.
+   *  retry: wrong answer offers "Rewatch & try again" — rewinds to atSec,
+   *  plays the segment, and re-presents the question at the cue. While
+   *  retries remain the correct answer is NOT revealed.
+   *  advance: correct answer turns Continue into a skip-ahead to atSec. */
+  retry?: { atSec: number; message?: string; maxAttempts: number; allowOptOut: boolean };
+  advance?: { atSec: number; label?: string };
 }
 
 export interface ScormBuildInput {

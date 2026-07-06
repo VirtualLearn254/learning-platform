@@ -40,12 +40,35 @@ export const QuizBranchSchema = z.object({
   returnToBeatKey: z.string(),
 });
 
+/** H5P-style adaptivity: what happens after an answer. Targets are beat
+ *  keys (resolved to master-video seconds at publish) or raw seconds. */
+export const QuizAdaptivitySchema = z.object({
+  wrong: z.object({
+    /** Rewind target for "rewatch & retry" — defaults to the quiz's own beat. */
+    rewatchBeatKey: z.string().optional(),
+    seekToSec: z.number().optional(),
+    /** Shown instead of per-option feedback while retries remain. */
+    message: z.string().optional(),
+    /** Retries allowed before the answer is revealed. Default 1. */
+    maxAttempts: z.number().int().min(0).max(5).optional(),
+    /** Learner may continue without retrying. Default true. */
+    allowOptOut: z.boolean().optional(),
+  }).optional(),
+  correct: z.object({
+    /** Optional skip-ahead past remedial content. */
+    skipToBeatKey: z.string().optional(),
+    seekToSec: z.number().optional(),
+    seekLabel: z.string().optional(),
+  }).optional(),
+}).optional();
+
 export const QuizSpecSchema = z.object({
   type: QuizTypeSchema,
   question: z.string(),
   eyebrow: z.string().optional(),
   /** Overrides the type's default one-line usage hint. */
   instructions: z.string().optional(),
+  adaptivity: QuizAdaptivitySchema,
   bloomLevel: BloomLevelSchema.optional(),
   /** hotspot: the image that is the question canvas (URL or data URI). */
   image: z.string().optional(),
