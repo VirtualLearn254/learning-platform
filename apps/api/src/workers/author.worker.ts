@@ -8,7 +8,7 @@
  */
 
 import { Worker } from "bullmq";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, tables } from "../db/index.js";
@@ -36,6 +36,34 @@ const AUTHORABLE_QUIZ_TYPES = [
   "scenario", "likert", "flashcard", "estimate",
   "memory_pairs", "this_or_that", "word_search", "guess_concept",
 ] as const;
+
+/** Infer the quiz type a check beat's INGEST outline suggests, so the author
+ *  can enforce variety course-wide even before sibling checks are authored
+ *  (authoring runs in parallel — an unauthored sibling still has its outline).
+ *  Order matters: match the most specific phrasings first. */
+function parseQuizTypeHint(script: string): string | null {
+  const s = script.toLowerCase();
+  const patterns: Array<[RegExp, string]> = [
+    [/this[- ]or[- ]that/, "this_or_that"],
+    [/multi[- ]?select|select all|select several|which of/, "multi_select"],
+    [/true[/ -]?false|true or false/, "true_false"],
+    [/order(ing)?|sequence|arrange|steps in order|rank/, "ordering"],
+    [/sort[- ]into|classif|categor|bucket/, "sort_into"],
+    [/memory[- ]?pair|memory game/, "memory_pairs"],
+    [/word[- ]?bank|fill the blank|complete the sentence/, "word_bank"],
+    [/word[- ]?search/, "word_search"],
+    [/match(ing)?\b/, "match"],
+    [/scenario|situation|what would you do|judgment|judgement/, "scenario"],
+    [/flashcard|flip card|self[- ]check/, "flashcard"],
+    [/estimat|slider|numeric intuition|how many|how much/, "estimate"],
+    [/fill[- ]in|type the answer|compute/, "fill_in"],
+    [/guess[- ]the[- ]concept|guess concept|identify the term|from clues/, "guess_concept"],
+    [/likert|confidence|stance|reflect/, "likert"],
+    [/multiple[- ]choice|one right answer|choose the correct/, "multiple_choice"],
+  ];
+  for (const [re, type] of patterns) if (re.test(s)) return type;
+  return null;
+}
 
 const QuizOut = z.object({
   type: z.enum(AUTHORABLE_QUIZ_TYPES),
@@ -116,7 +144,7 @@ Pick the ONE type that fits what is being tested. The catalog, by cognitive leve
 - apply:      "fill_in" (a COMPUTED answer they type), "estimate" (numeric intuition on a slider), "ordering" (steps of a procedure), "sort_into" (classify items into 2-3 categories), "this_or_that" (rapid-fire classification)
 - analyze/evaluate: "scenario" (a situation + what-would-you-do), "multi_select" (select ALL that apply)
 - reflection only: "likert" (no wrong answers — confidence/stance)
-VARIETY IS MANDATORY: look at the quiz types already used by earlier check beats in this lesson (listed in the context) and pick a DIFFERENT type unless pedagogy truly demands a repeat. Across a lesson, checks should feel like different games, not the same form.
+VARIETY IS MANDATORY (course-wide): the context lists the quiz types ALREADY CLAIMED by other checks across the whole course and the UNUSED types remaining. Pick an UNUSED type. A learner moving through the course must meet a different interaction at each check — never the same form twice while unused types remain. Match the type to the content's cognitive level (below), but among the fitting types always prefer one nobody else has taken. Reuse is a last resort, only when no unused type can honestly test this content.
 NEVER use "hotspot" or "image_choice" (they require images you cannot produce).
 
 Schema: {"type": ..., "question": string, "bloomLevel": ..., "options": [...], "correctFeedback"?: string, "wrongFeedback"?: string, "adaptivity"?: {...}}
@@ -163,7 +191,8 @@ function buildUserPrompt(args: {
   outline: string;
   earlierBeats: Array<{ beatType: string; beatKey: string; outline: string }>;
   allEarlierBeatKeys: string[];
-  earlierQuizTypes: string[];
+  usedQuizTypes: string[];
+  allQuizTypes: string[];
   revisionFeedback?: string;
 }): string {
   const lines: string[] = [];
@@ -185,7 +214,9 @@ function buildUserPrompt(args: {
   if (args.beatType === "check") {
     lines.push("");
     lines.push(`REWATCH TARGETS (valid beatKeys for adaptivity.wrong.rewatchBeatKey): ${args.allEarlierBeatKeys.join(", ") || "(none — omit rewatchBeatKey)"}`);
-    lines.push(`QUIZ TYPES ALREADY USED by earlier checks in this lesson: ${args.earlierQuizTypes.join(", ") || "(none yet — free choice)"} — pick a DIFFERENT type.`);
+    const unused = args.allQuizTypes.filter((t) => !args.usedQuizTypes.includes(t));
+    lines.push(`QUIZ TYPES ALREADY CLAIMED by other checks in THIS COURSE: ${args.usedQuizTypes.join(", ") || "(none yet)"}.`);
+    lines.push(`You MUST pick a type NOT in that list — the course needs every check to feel different. Prefer one of the UNUSED types: ${unused.join(", ")}. Only reuse a claimed type if the content genuinely admits no unused type that fits (rare — you have ${unused.length} to choose from).`);
   }
   if (args.revisionFeedback) {
     lines.push("");
@@ -256,10 +287,30 @@ export function startAuthorWorker() {
       const earlierBeats = allEarlier
         .slice(-4)
         .map((b) => ({ beatType: b.beatType, beatKey: b.beatKey, outline: b.script.slice(0, 200) }));
-      // Quiz variety: which types have earlier checks already used?
-      const earlierQuizTypes = [...new Set(allEarlier
-        .map((b) => (b.quiz as { type?: string } | null)?.type)
-        .filter((t): t is string => !!t))];
+      // Quiz variety — COURSE-WIDE, not lesson-wide. Each lesson has ~1 check,
+      // so a lesson-scoped list is almost always empty and never catches the
+      // real failure: two lessons independently picking the same type. Look at
+      // every OTHER check in the course; use its authored type if it has one,
+      // else the type its ingest outline suggests (siblings author in parallel
+      // so many aren't authored yet, but their outlines already imply a type).
+      let usedQuizTypes: string[] = [];
+      if (beat.beatType === "check") {
+        const courseChecks = await db
+          .select({ script: tables.beats.script, quiz: tables.beats.quiz })
+          .from(tables.beats)
+          .innerJoin(tables.lessons, eq(tables.beats.lessonId, tables.lessons.id))
+          .innerJoin(tables.modules, eq(tables.lessons.moduleId, tables.modules.id))
+          .innerJoin(tables.sections, eq(tables.modules.sectionId, tables.sections.id))
+          .where(and(
+            eq(tables.sections.courseId, course.id),
+            eq(tables.beats.beatType, "check"),
+            eq(tables.beats.isAlt, false),
+            ne(tables.beats.id, beatId),
+          ));
+        usedQuizTypes = [...new Set(courseChecks
+          .map((b) => (b.quiz as { type?: string } | null)?.type ?? parseQuizTypeHint(b.script))
+          .filter((t): t is string => !!t))];
+      }
 
       // Pull latest feedback if revising.
       let revisionFeedback: string | undefined;
@@ -287,7 +338,8 @@ export function startAuthorWorker() {
         outline: beat.script,
         earlierBeats,
         allEarlierBeatKeys: allEarlier.map((b) => b.beatKey),
-        earlierQuizTypes,
+        usedQuizTypes,
+        allQuizTypes: [...AUTHORABLE_QUIZ_TYPES],
         revisionFeedback,
       });
 
