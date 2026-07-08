@@ -653,9 +653,12 @@ window.__quizEngine = (function() {
     go.textContent = 'Continue \\u25B8';
     submit.classList.remove('show');
     retryBtn.classList.remove('show');
-    // Adaptivity (LP-12): while retries remain, a wrong answer offers
-    // "rewatch & try again" and the correct answer is NOT revealed.
-    var canRetry = !!(cue.retry && ctx.retryState && ctx.retryState.attemptsLeft > 0 && ctx.onRetry);
+    // Adaptivity (LP-12): a wrong answer ALWAYS offers both paths —
+    // "rewatch & try again" (go back to the teaching beat) and
+    // "continue anyway" (proceed) — no attempt cap, so the learner is
+    // never stranded. The correct answer is not revealed while they can
+    // still retry.
+    var canRetry = !!(cue.retry && ctx.onRetry);
     var settledRight = false;
     var box = q('#qz-opts');
     box.className = 'qz-opts' + (LAYOUTS[qtype] ? ' ' + LAYOUTS[qtype] : '');
@@ -2076,10 +2079,29 @@ ${QUIZ_ENGINE_JS}
     });
   }
 
+  // Re-arm a cue when the video rewinds before it — so a replay (or a
+  // scrub back) shows the quiz again instead of skipping it. Clears that
+  // cue's answered/score state so re-answering is a clean re-do.
+  function rearmCue(i) {
+    asked[i] = false;
+    done[i] = false;
+    attemptsUsed[i] = 0;
+    if (results[i]) {
+      points = Math.max(0, points - (results[i].pts || 0));
+      if (results[i].right) correctCount = Math.max(0, correctCount - 1);
+      answeredCount = Math.max(0, answeredCount - 1);
+      delete results[i];
+      hudPts.textContent = String(points);
+    }
+    buildMarkers();
+  }
+
   if (QUIZZES.length > 0) {
     video.addEventListener('timeupdate', function() {
       if (overlay.classList.contains('open')) return;
       for (var i = 0; i < QUIZZES.length; i++) {
+        // Rewound to before this cue → re-arm it for replay.
+        if (asked[i] && video.currentTime < QUIZZES[i].atSec - 1.5) rearmCue(i);
         if (!asked[i] && video.currentTime >= QUIZZES[i].atSec) {
           showQuiz(QUIZZES[i], i);
           break;
@@ -2321,17 +2343,14 @@ ${QUIZ_ENGINE_JS}
     var cue = JSON.parse(JSON.stringify(DEMOS[i].cue));
     cue.style = PALETTES[palette];
     // Simulated adaptivity: no video here, so "rewatch & retry" simply
-    // re-presents the question with one fewer attempt.
-    var attemptsLeft = cue.retry ? (cue.retry.maxAttempts != null ? cue.retry.maxAttempts : 1) : 0;
+    // re-presents the question (unlimited, matching the player).
     function present() {
       overlay.classList.remove('visible');
       overlay.classList.remove('open');
       setTimeout(function() {
         window.__quizEngine.render(cue, {
           overlay: overlay,
-          retryState: cue.retry ? { attemptsLeft: attemptsLeft } : null,
           onRetry: function() {
-            attemptsLeft--;
             present();
           },
           onSettle: function() {},
