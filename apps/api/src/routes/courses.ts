@@ -61,10 +61,14 @@ export const coursesRoute = new Hono()
     let authorQueued = 0;
     let renderQueued = 0;
     for (const b of beats.filter((b) => !b.isAlt)) {
-      if (b.stage === "ingested" || b.stage === "queued") {
-        await queues.author.add("conductor-author", { beatId: b.id, isRevision: false });
+      if (b.stage === "ingested" || b.stage === "queued" || b.stage === "authoring" || b.stage === "revising") {
+        // ingested/queued: never authored. authoring/revising: orphaned
+        // mid-author by a crash/deploy — re-queue so it isn't stuck.
+        await queues.author.add("conductor-author", { beatId: b.id, isRevision: b.stage === "revising" });
         authorQueued++;
-      } else if ((b.stage === "ai_review" || b.stage === "human_review" || b.stage === "approved") && !b.mp4Key) {
+      } else if ((b.stage === "ai_review" || b.stage === "human_review" || b.stage === "approved" || b.stage === "rendering") && !b.mp4Key) {
+        // ...including "rendering": a beat orphaned MID-render has that stage
+        // and no mp4 yet — the old condition skipped it, wedging the course.
         await queues.render.add("conductor-render", { beatId: b.id });
         renderQueued++;
       }

@@ -385,7 +385,7 @@ export function startAuthorWorker() {
     } catch (err) {
       return await fail(err);
     }
-  }, { connection: workerConnection, concurrency: 6 });
+  }, { connection: workerConnection, concurrency: 6, lockDuration: 120_000, maxStalledCount: 5 });
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────

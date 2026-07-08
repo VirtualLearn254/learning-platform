@@ -280,5 +280,5 @@ export function startScormWorker() {
     } catch (err) {
       return await fail(err);
     }
-  }, { connection: workerConnection, concurrency: 2 });
+  }, { connection: workerConnection, concurrency: 2, lockDuration: 180_000, maxStalledCount: 5 });
 }

@@ -123,5 +123,5 @@ export function startStitchWorker() {
     } catch (err) {
       return await fail(err);
     }
-  }, { connection: workerConnection, concurrency: 1 });
+  }, { connection: workerConnection, concurrency: 1, lockDuration: 180_000, maxStalledCount: 5 });
 }

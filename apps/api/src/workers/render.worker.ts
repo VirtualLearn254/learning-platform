@@ -287,5 +287,15 @@ export function startRenderWorker() {
     } catch (err) {
       return await fail(err);
     }
-  }, { connection: workerConnection, concurrency: RENDER_CONCURRENCY });
+  }, {
+    connection: workerConnection,
+    concurrency: RENDER_CONCURRENCY,
+    // A render takes minutes; give the lock ample headroom so a busy worker
+    // isn't mistaken for stalled, and let BullMQ re-queue an orphaned render
+    // (deploy/kill mid-render) several times before giving up — the default
+    // maxStalledCount:1 permanently FAILS a job orphaned by two deploys,
+    // which wedges the course.
+    lockDuration: 180_000,
+    maxStalledCount: 5,
+  });
 }
