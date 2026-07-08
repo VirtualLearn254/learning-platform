@@ -94,7 +94,12 @@ function runFfmpeg(args: string[]): Promise<void> {
     ff.stderr.on("data", (b) => { err += b.toString(); });
     ff.on("close", (code) => {
       if (code === 0) return resolve();
-      reject(new Error(`ffmpeg exited ${code}: ${err.slice(-500)}`));
+      // Surface the ACTUAL failure line, not the encoder-stats tail: ffmpeg
+      // prints per-stream stats last, so slice(-N) hides the real error.
+      const errLines = err.split("\n").filter((l) =>
+        /error|invalid|failed|could not|no such|unable|does not/i.test(l),
+      ).slice(-6).join("\n");
+      reject(new Error(`ffmpeg exited ${code}: ${errLines || err.slice(-400)}`));
     });
     ff.on("error", reject);
   });
@@ -118,7 +123,6 @@ export async function concatMp4s(
     return { mp4: inputs[0]!, durationSec: dur };
   }
   const dir = await mkdtemp(join(tmpdir(), "stitch-"));
-  const concatListPath = join(dir, "concat.txt");
   const outPath = join(dir, "master.mp4");
   try {
     const paths: string[] = [];
@@ -128,14 +132,30 @@ export async function concatMp4s(
       paths.push(p);
     }
 
-    // ffmpeg concat demuxer syntax: file 'path'
-    const listLines = paths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n");
-    await writeFile(concatListPath, listLines);
+    // Concat FILTER, not demuxer. The demuxer requires every input to share
+    // codec params/timebase and fails at mux time on subtle mismatches
+    // (per-beat renders can differ slightly in fps/SAR/audio params). The
+    // filter re-normalizes each stream to identical params FIRST, then joins
+    // — robust against heterogeneous inputs.
+    const norm: string[] = [];
+    const labels: string[] = [];
+    for (let i = 0; i < inputs.length; i++) {
+      norm.push(
+        `[${i}:v]scale=1920:1080:force_original_aspect_ratio=decrease,` +
+        `pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v${i}]`,
+      );
+      // aresample fills gaps / fixes drift; uniform 48k stereo fltp.
+      norm.push(`[${i}:a]aresample=async=1,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[a${i}]`);
+      labels.push(`[v${i}][a${i}]`);
+    }
+    const filter = norm.join(";") + ";" +
+      labels.join("") + `concat=n=${inputs.length}:v=1:a=1[v][a]`;
 
-    // Re-encode for safety. libx264 + AAC matches our per-beat encoder.
     await runFfmpeg([
       "-y",
-      "-f", "concat", "-safe", "0", "-i", concatListPath,
+      ...paths.flatMap((p) => ["-i", p]),
+      "-filter_complex", filter,
+      "-map", "[v]", "-map", "[a]",
       "-c:v", "libx264",
       "-pix_fmt", "yuv420p",
       "-preset", "veryfast",
