@@ -23,6 +23,7 @@ import { s3 } from "../lib/s3.js";
 import { buildLessonPdfs } from "../lib/pdf.js";
 import { getStylePalette } from "../lib/hf-designer.js";
 import { ensureQuizSkin } from "../lib/quiz-skin.js";
+import { checkQuizFrames } from "../lib/quiz-vision-check.js";
 import { getAIClient } from "../lib/ai_client.js";
 import { scormPackager, notifications } from "./services.js";
 
@@ -222,6 +223,43 @@ export function startScormWorker() {
         await db.update(tables.beats).set({
           stage: "published", updatedAt: new Date(),
         }).where(eq(tables.beats.id, beat.id));
+      }
+
+      // Vision-QA the published quiz scenes (non-blocking): screenshot each
+      // quiz with the SHIPPED skin and let the verifier flag render defects
+      // (overflow, contrast, skin clash). Findings merge into holisticIssues
+      // so they surface in the UI. Publish already happened above — a failure
+      // here never affects it.
+      if (quizzes.length > 0) {
+        try {
+          await note(`vision-checking ${quizzes.length} quiz scene(s)`);
+          const visAi = await getAIClient();
+          const vis = await checkQuizFrames(visAi, {
+            quizzes: quizzes.map((q) => ({ cue: q })),
+            skinCss: quizSkinCss,
+            meta: { lessonId },
+          });
+          const visIssues = vis.flatMap((r) =>
+            r.issues
+              .filter((i) => i.severity !== "P2")
+              .map((i) => ({
+                severity: i.severity,
+                category: "quiz-visual",
+                description: `[${r.type} @ ${r.beatKey}] ${i.what}`,
+                affectedBeats: [r.beatKey],
+              })),
+          );
+          const failing = vis.filter((r) => !r.pass).map((r) => r.beatKey);
+          if (visIssues.length > 0) {
+            const existing = lesson.holisticIssues ?? [];
+            await db.update(tables.lessons)
+              .set({ holisticIssues: [...existing, ...visIssues] })
+              .where(eq(tables.lessons.id, lessonId));
+          }
+          console.log(`[scorm] quiz-vision: ${vis.length} checked · ${visIssues.length} issue(s) · ${failing.length} failing${failing.length ? " (" + failing.join(", ") + ")" : ""}`);
+        } catch (visErr) {
+          console.warn(`[scorm] quiz-vision skipped (publish unaffected):`, visErr instanceof Error ? visErr.message : visErr);
+        }
       }
 
       await db.update(tables.jobs).set({

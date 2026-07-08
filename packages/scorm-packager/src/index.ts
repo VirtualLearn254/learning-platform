@@ -2255,6 +2255,51 @@ export function lintQuizSkin(css: string): { ok: boolean; errors: string[] } {
 }
 
 /**
+ * Render ONE quiz cue as a self-contained, static HTML page (1280x720) using
+ * the exact shipping CSS + engine + skin. The entrance animation is frozen so
+ * a headless screenshot is deterministic — used by the vision-QA pass to check
+ * each published quiz for overflow / contrast / consistency.
+ */
+export function buildQuizScenePage(cue: ScormQuizCue, skinCss?: string): string {
+  const cueJson = JSON.stringify(cue).replace(/</g, "\\u003c");
+  const styleJson = JSON.stringify(cue.style ?? {}).replace(/</g, "\\u003c");
+  const bg = cue.style?.bg ?? "#101418";
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<style>
+  html, body { margin: 0; padding: 0; width: 1280px; height: 720px; background: ${bg}; overflow: hidden; }
+  .stage { position: relative; width: 1280px; height: 720px; }
+${QUIZ_SCENE_CSS}
+  /* Force the scene shown and freeze the entrance so the screenshot is stable. */
+  .quiz-scene { display: block !important; opacity: 1 !important; position: absolute; inset: 0; }
+  .qz-anim { opacity: 1 !important; transform: none !important; transition: none !important; }
+</style>
+${skinCss ? `<style id="quiz-skin">\n${skinCss.replace(/<\//g, "<\\/")}\n</style>` : ""}
+</head><body>
+  <div class="stage"><div class="quiz-scene" id="qz">
+${QUIZ_SCENE_HTML}
+  </div></div>
+<script>
+${QUIZ_ENGINE_JS}
+(function() {
+  var scene = document.getElementById('qz');
+  window.__quizEngine.applyPalette(scene, ${styleJson});
+  window.__quizEngine.render(${cueJson}, { overlay: scene, onSettle: function(){}, onContinue: function(){}, onRetry: function(){} });
+  scene.classList.add('open', 'visible');
+  // Replicate the player's fitSceneToVideo(): the content frame fills the
+  // 16:9 stage and the em unit is width/42 — the beats' design scale. Inline
+  // styles so a skin's position/size overrides can't collapse the frame.
+  var frame = document.getElementById('qz-frame');
+  frame.style.position = 'absolute';
+  frame.style.left = '0px'; frame.style.top = '0px';
+  frame.style.width = '1280px'; frame.style.height = '720px';
+  scene.style.fontSize = (1280 / 42) + 'px';
+})();
+</script>
+</body></html>`;
+}
+
+/**
  * Standalone quiz style gallery — a single HTML file for viewing and
  * evolving quiz styles WITHOUT a video. Same CSS + engine as the SCORM
  * player, so what you approve here is exactly what ships in lessons.
