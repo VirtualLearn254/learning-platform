@@ -269,11 +269,15 @@ export function startRenderWorker() {
         endedAt: new Date(),
       }).where(eq(tables.jobs.id, jobId));
 
-      // 5. If all beats in lesson are rendered, queue the stitch.
+      // 5. If all beats in lesson are actually RENDERED, queue the stitch.
+      // Gate on mp4Key (real render output), NOT stage: on autopilot,
+      // ai-review sets every beat to "approved" the moment it passes review
+      // — before rendering — so a stage-based check fires the instant the
+      // FIRST beat renders and publishes a hook-only master. mp4Key is only
+      // set here, when a render truly completes, so the last render to finish
+      // triggers the stitch exactly once.
       const siblings = await db.select().from(tables.beats).where(eq(tables.beats.lessonId, beat.lessonId));
-      const allReady = siblings.every((b) =>
-        b.stage === "approved" || b.stage === "stitched" || b.stage === "published"
-      );
+      const allReady = siblings.every((b) => b.isAlt || !!b.mp4Key);
       if (allReady) {
         await queues.stitch.add("stitch-lesson", { lessonId: beat.lessonId });
       }

@@ -56,9 +56,21 @@ export function startStitchWorker() {
       const beats = await db.select().from(tables.beats)
         .where(eq(tables.beats.lessonId, lessonId))
         .orderBy(asc(tables.beats.order));
-      const main = beats.filter((b) => !b.isAlt && b.mp4Key);
+      const mainBeats = beats.filter((b) => !b.isAlt);
+      const main = mainBeats.filter((b) => b.mp4Key);
 
       if (main.length === 0) return await fail(new Error("No main-beat MP4s found for this lesson"));
+      // Defense-in-depth: NEVER stitch a partial lesson. Filtering to beats
+      // that happen to have an mp4Key would silently produce a hook-only
+      // master if triggered before all renders finish. Bail instead — the
+      // last render to complete re-queues a stitch with everything present.
+      const missing = mainBeats.filter((b) => !b.mp4Key);
+      if (missing.length > 0) {
+        return await fail(new Error(
+          `Lesson not fully rendered — ${missing.length}/${mainBeats.length} beats have no MP4 yet ` +
+          `(${missing.map((b) => b.beatKey).join(", ")}). Skipping stitch; it re-queues when renders finish.`,
+        ));
+      }
 
       await note(`downloading ${main.length} beat MP4s from storage`);
       const inputs: Buffer[] = [];
