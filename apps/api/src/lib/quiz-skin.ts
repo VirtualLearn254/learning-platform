@@ -76,12 +76,33 @@ IMPORTANT: the engine sets the --q-* variables INLINE on .quiz-scene per cue
 You receive the same palette below — design WITH it; where you want a
 different treatment, style the components directly (e.g. .qz-opt { background: ... }).
 
+CONSISTENCY IS THE #1 GOAL — the quiz plays INSIDE the video, between two
+animated beats. It must read as ONE MORE SCENE of the same production, not a
+separate template dropped in. Concretely:
+- Match the LESSON DESIGN BRIEF below exactly — same typography feel, same
+  card/surface treatment (radius, border, shadow), same decorative device.
+  The beats follow the brief; the quiz must too. The brief wins over every
+  other instinct here.
+- Stay CALM and EDITORIAL, like the beats. Do NOT add heavy background
+  patterns, tiled motifs, letterbox bars, or busy decoration UNLESS the
+  brief explicitly calls for that energy. A quiet quiz that matches beats
+  beats a flashy quiz that clashes.
+- Keep the palette's temperature and contrast — don't introduce a new
+  accent or a darker/lighter field than the beats use.
+- The .qz-deco glyph should be barely-there (very low opacity), never a
+  focal element.
+
 HARD RULES (a linter rejects violations and your skin is discarded):
 - Every selector must contain .quiz-scene or a .qz- class. Nothing outside that scope.
 - NEVER: display:none, visibility:hidden, pointer-events, position:fixed, position:sticky, @import, url(http...), script/markup.
 - Keep .correct visibly green-family and .wrong red-family (may be tinted toward the brand, but right/wrong must differ by more than hue).
 - Max ~180 lines. Sizes in em (the scene's em unit scales with the frame).
 ${SCOUT_VOCAB}
+NOTE on the vocabulary above: these are OPTIONAL polish techniques from
+interactive-quiz design. Use them SPARINGLY and only where they reinforce
+the lesson's own look — never let them override the consistency goal or the
+design brief. When in doubt, match the beats and leave the technique out.
+
 ## Output
 Reply with ONLY the CSS. No markdown fences, no commentary.`;
 
@@ -89,6 +110,30 @@ function extractCss(text: string): string {
   // Strip accidental fences; keep the largest CSS-looking chunk.
   const fenced = text.match(/```(?:css)?\s*([\s\S]*?)```/);
   return (fenced ? fenced[1]! : text).trim();
+}
+
+/** Pull the <style> block from a representative rendered beat's composition
+ *  HTML (persisted at beats/<id>/composition.html), so the skin designer can
+ *  mirror the beats' real look. Prefers a concept/example beat over the hook
+ *  (hooks tend to be atypically dramatic). Best-effort — null if unavailable. */
+async function referenceBeatCss(lessonId: string): Promise<string | null> {
+  try {
+    const beats = await db.select().from(tables.beats).where(eq(tables.beats.lessonId, lessonId));
+    const main = beats.filter((b) => !b.isAlt).sort((a, b) => a.order - b.order);
+    // Prefer concept/example (representative body scenes); fall back to any.
+    const pick = main.find((b) => b.beatType === "concept" || b.beatType === "example") ?? main[1] ?? main[0];
+    if (!pick) return null;
+    const obj = await s3.getObject(`beats/${pick.id}/composition.html`);
+    const html = Buffer.from(obj.body).toString("utf-8");
+    const style = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1] ?? "";
+    const trimmed = style
+      .replace(/\/\*[\s\S]*?\*\//g, "")            // drop comments
+      .replace(/\n{2,}/g, "\n").trim();
+    if (trimmed.length < 40) return null;
+    return trimmed.length > 4500 ? trimmed.slice(0, 4500) + "\n/* …truncated */" : trimmed;
+  } catch {
+    return null;
+  }
 }
 
 export async function ensureQuizSkin(
@@ -108,6 +153,12 @@ export async function ensureQuizSkin(
   const palette = getStylePalette(opts.styleHint);
   const rules = await getRulesBlock("designer");
   const brief = lesson?.designBrief ? `\nLesson design brief (the beats follow this — the skin must too):\n${lesson.designBrief}` : "";
+  // Reference the ACTUAL beats: pull a representative rendered beat's CSS so
+  // the skin mirrors its real typography/cards/motifs instead of guessing.
+  const beatCss = await referenceBeatCss(lessonId);
+  const reference = beatCss
+    ? `\n\nREFERENCE — CSS from a real rendered beat in THIS lesson. This is exactly what the video looks like. MIRROR its typography (families, weights, letter-spacing), its card/surface treatment (radius, border, shadow), its accent usage, and any decorative motif. Your quiz must look like it came from the same stylesheet:\n\`\`\`css\n${beatCss}\n\`\`\``
+    : "";
 
   let lintNote = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -117,9 +168,9 @@ export async function ensureQuizSkin(
           { role: "system", content: SKIN_SYSTEM + rules },
           { role: "user", content: `Lesson: "${opts.lessonTitle}"
 Style: ${opts.styleHint ?? "swiss-grid"}
-Palette (the beats use exactly these): bg ${palette.bg} · ink ${palette.ink} · muted ${palette.muted} · accent ${palette.accent} · surface ${palette.surface}${brief}
+Palette (the beats use exactly these): bg ${palette.bg} · ink ${palette.ink} · muted ${palette.muted} · accent ${palette.accent} · surface ${palette.surface}${brief}${reference}
 
-Design the quiz skin. Refine, don't fight, the palette: you may deepen shadows, add a background motif on .quiz-scene/.qz-deco, reshape cards/chips/buttons, tune the type scale — everything within the contract.${lintNote}` },
+Design the quiz skin so it is visually CONSISTENT with the reference beat above. Match its type feel, card/surface treatment, and restraint; refine, don't fight, the palette. Keep it calm and editorial like the beats.${lintNote}` },
         ],
         meta: { lessonId },
       });
