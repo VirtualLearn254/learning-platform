@@ -17,8 +17,15 @@
  * ./profiles.ts and can be edited without touching call sites.
  */
 
-import { type AIProfile, type Profile, profiles } from "./profiles.js";
+import { type AIProfile, type Profile, type ProviderId, profiles } from "./profiles.js";
+import { MODEL_CATALOG } from "./catalog.js";
 import { type ChatRequest, type ChatResponse, type VisionRequest } from "./types.js";
+
+/** $ per 1M output tokens for a provider's model (0 if unknown). Used to
+ *  refuse a silent, materially-pricier provider fallback. */
+function outputPricePer1M(providerId: ProviderId, modelId: string): number {
+  return MODEL_CATALOG[providerId]?.find((m) => m.id === modelId)?.outputPer1M ?? 0;
+}
 import { VllmProvider } from "./providers/vllm.js";
 import { OpenAIProvider } from "./providers/openai.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
@@ -83,12 +90,37 @@ export function createAIClient(
   function pickProvider(profile: AIProfile, override?: ProfileOverride) {
     const chain = effectiveChain(profile, override);
     const overrideModel = override?.modelId;
-    for (const preferred of chain) {
-      if (preferred === "anthropic" && anthropic) return { provider: anthropic, model: overrideModel ?? profile.modelByProvider.anthropic };
-      if (preferred === "local" && vllm)         return { provider: vllm,      model: overrideModel ?? profile.modelByProvider.local };
-      if (preferred === "openai" && openai)      return { provider: openai,    model: overrideModel ?? profile.modelByProvider.openai };
-      if (preferred === "deepseek" && deepseek)  return { provider: deepseek,  model: overrideModel ?? profile.modelByProvider.deepseek };
-      if (preferred === "fireworks" && fireworks) return { provider: fireworks, model: overrideModel ?? profile.modelByProvider.fireworks };
+    const intended = chain[0]!; // profile.preferred is never empty
+    const resolve = (id: import("./profiles.js").ProviderId) => {
+      if (id === "anthropic" && anthropic) return { provider: anthropic, model: overrideModel ?? profile.modelByProvider.anthropic };
+      if (id === "local" && vllm)          return { provider: vllm,      model: overrideModel ?? profile.modelByProvider.local };
+      if (id === "openai" && openai)       return { provider: openai,    model: overrideModel ?? profile.modelByProvider.openai };
+      if (id === "deepseek" && deepseek)   return { provider: deepseek,  model: overrideModel ?? profile.modelByProvider.deepseek };
+      if (id === "fireworks" && fireworks) return { provider: fireworks, model: overrideModel ?? profile.modelByProvider.fireworks };
+      return null;
+    };
+    for (const id of chain) {
+      const picked = resolve(id);
+      if (!picked) continue;
+      if (id !== intended) {
+        // A fallback occurred — the preferred/pinned provider isn't configured.
+        // NEVER let this be silent (it hid a Fireworks outage while quietly
+        // running the designer on 13x-pricier Anthropic).
+        console.warn(`[ai-provider] ${profile.id}: preferred provider "${intended}" is not configured — falling back to "${id}".`);
+        // If the operator EXPLICITLY pinned a provider (a deliberate cost/
+        // quality choice) and the fallback is materially pricier, refuse to
+        // silently overspend — fail loud so the outage is noticed, not absorbed.
+        if (override?.preferredProvider === intended) {
+          const iPrice = outputPricePer1M(intended, profile.modelByProvider[intended]);
+          const aPrice = outputPricePer1M(id, profile.modelByProvider[id]);
+          if (iPrice > 0 && aPrice > iPrice * 2) {
+            throw new Error(
+              `[ai-provider] provider unavailable: role "${profile.id}" is pinned to "${intended}" but it is not configured, and the only available fallback "${id}" costs ${(aPrice / iPrice).toFixed(1)}x more per output token ($${iPrice}→$${aPrice}/1M). Refusing to silently overspend — restore "${intended}" or change the role's provider in Settings.`,
+            );
+          }
+        }
+      }
+      return { ...picked, providerId: id };
     }
     throw new Error(
       `No configured provider for profile "${profile.id}". Preferred order: ${chain.join(", ")}. ` +

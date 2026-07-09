@@ -57,7 +57,7 @@ const ANIMATED_ENABLED = (process.env.RENDER_MODE ?? "animated") !== "static";
  *  billing phrases. */
 function isProviderUnavailable(msg: string): boolean {
   return /\b(401|402|403|412|429)\b/.test(msg)
-    || /suspend|spending limit|spend cap|quota|insufficient|billing|payment required|rate limit|over.?loaded|unauthorized|invalid api key|account is/i.test(msg);
+    || /suspend|spending limit|spend cap|quota|insufficient|billing|payment required|rate limit|over.?loaded|unauthorized|invalid api key|account is|provider unavailable|silently overspend/i.test(msg);
 }
 
 /** Parallel render jobs. 2 is the proven-stable setting for a 6vCPU/12GB box
