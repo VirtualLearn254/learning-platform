@@ -90,10 +90,11 @@ export const beatsRoute = new Hono()
     if (!beat) return c.json({ error: "not_found" }, 404);
     const verifyFrames = [1, 2, 3].map((i) => ({ key: `beats/${id}/verify-${i}.png`, label: ["entrance", "hero", "settle"][i - 1]! }));
     if (!beat.mp4Key) return c.json({ frames: [], verifyFrames });
+    const KEYFRAMES_VERSION = 2; // bump to invalidate all cached manifests
     const manifestKey = `beats/${id}/keyframes/manifest.json`;
     try {
       const m = JSON.parse(Buffer.from((await s3.getObject(manifestKey)).body).toString("utf8"));
-      if (m.sourceMp4Key === beat.mp4Key) return c.json({ frames: m.frames, verifyFrames });
+      if (m.version === KEYFRAMES_VERSION && m.sourceMp4Key === beat.mp4Key) return c.json({ frames: m.frames, verifyFrames });
     } catch { /* stale or absent — regenerate */ }
     const mp4 = Buffer.from((await s3.getObject(beat.mp4Key)).body);
     const kf = await extractKeyframes(mp4);
@@ -103,7 +104,7 @@ export const beatsRoute = new Hono()
       await s3.putObject(key, kf[i]!.jpeg, { contentType: "image/jpeg" });
       frames.push({ key, timeSec: kf[i]!.timeSec });
     }
-    await s3.putObject(manifestKey, Buffer.from(JSON.stringify({ sourceMp4Key: beat.mp4Key, frames })), { contentType: "application/json" });
+    await s3.putObject(manifestKey, Buffer.from(JSON.stringify({ version: KEYFRAMES_VERSION, sourceMp4Key: beat.mp4Key, frames })), { contentType: "application/json" });
     return c.json({ frames, verifyFrames });
   })
   .post("/:id/reference-image", async (c) => {

@@ -19,26 +19,28 @@ import puppeteer, { type Browser } from "puppeteer-core";
 const CHROMIUM_PATH = process.env.PUPPETEER_EXECUTABLE_PATH ?? "/usr/bin/chromium-browser";
 
 /**
- * Extract the UNIQUE frames from a rendered beat MP4 — the handful of moments
- * where the picture actually changes (reveals/transitions), not the ~1,200
- * near-identical 30fps frames. Uses ffmpeg scene-change detection; the first
- * frame is always included. Returns each frame's JPEG + its timestamp so the
- * UI can seek the scrubber to it. Pure compute — no AI, ~1-3s.
+ * Extract a strip of representative frames from a rendered beat MP4 — a frame
+ * every ~1.5s across the timeline, not the ~1,200 near-identical 30fps frames.
+ * Even-interval sampling (NOT scene-detection): these beats animate smoothly —
+ * text fades in, elements drift — so consecutive frames never cross a
+ * scene-cut threshold, and scene-detect would return just the first frame.
+ * Returns each frame's JPEG + its timestamp so the UI can seek the scrubber to
+ * it. Pure compute — no AI, ~1-3s.
  */
 export async function extractKeyframes(
   mp4: Buffer,
-  opts: { threshold?: number; max?: number; width?: number } = {},
+  opts: { intervalSec?: number; max?: number; width?: number } = {},
 ): Promise<Array<{ jpeg: Buffer; timeSec: number }>> {
-  const threshold = opts.threshold ?? 0.12;
+  const intervalSec = opts.intervalSec ?? 1.5;
   const max = opts.max ?? 30;
   const width = opts.width ?? 360;
   const dir = await mkdtemp(join(tmpdir(), "keyframes-"));
   const inPath = join(dir, "in.mp4");
   try {
     await writeFile(inPath, mp4);
-    // select first frame + scene changes; showinfo prints pts_time per output
+    // Sample one frame every `intervalSec`; showinfo prints pts_time per output
     // frame to stderr, in the same order as the numbered jpegs.
-    const filter = `select='eq(n\\,0)+gt(scene\\,${threshold})',scale=${width}:-1,showinfo`;
+    const filter = `fps=1/${intervalSec},scale=${width}:-1,showinfo`;
     const stderr = await runFfmpegCapture([
       "-y", "-i", inPath, "-vf", filter, "-vsync", "vfr", "-q:v", "5",
       join(dir, "kf-%03d.jpg"),
