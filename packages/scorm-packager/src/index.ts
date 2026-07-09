@@ -2066,6 +2066,7 @@ ${QUIZ_ENGINE_JS}
         buildMarkers();      // marker flips to answered state
         if (right) correctCount++;
         award(idx, right);
+        recordInteraction(cue, idx, right); // capture the per-question SCORM record
       },
       onContinue: function(advanceTo) {
         overlay.classList.remove('visible'); // crossfade back to the paused frame…
@@ -2096,6 +2097,42 @@ ${QUIZ_ENGINE_JS}
     buildMarkers();
   }
 
+  // ── SCORM interactions (per-question record for the LMS gradebook) ──
+  // Recorded at answer time, reported at completion. Maps our quiz types to
+  // the SCORM interaction vocabulary; learner/correct responses are readable
+  // text so Moodle's Interactions report is legible to teachers.
+  var interactions = [];
+  function scormType(t) {
+    var m = { true_false: 'true-false', multiple_choice: 'choice', image_choice: 'choice',
+      multi_select: 'choice', scenario: 'choice', this_or_that: 'matching', sort_into: 'matching',
+      match: 'matching', memory_pairs: 'matching', ordering: 'sequencing', fill_in: 'fill-in',
+      word_bank: 'fill-in', guess_concept: 'fill-in', word_search: 'other', estimate: 'numeric',
+      likert: 'likert', flashcard: 'other', hotspot: 'performance' };
+    return m[t] || 'other';
+  }
+  function scrapeOpt(el) {
+    // Read the option's label WITHOUT its A/B/C key chip (.k) or drag handle.
+    var c = el.cloneNode(true), junk = c.querySelectorAll('.k, .qz-handle');
+    for (var j = 0; j < junk.length; j++) junk[j].remove();
+    return (c.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 240);
+  }
+  function recordInteraction(cue, idx, right) {
+    var q = cue.quiz || {};
+    var correct = (q.options || []).filter(function(o) { return o.isCorrect; })
+      .map(function(o) { return o.text || o.id; }).join(', ').slice(0, 250);
+    var learner = '';
+    var sel = overlay.querySelectorAll('.qz-opt.sel, .qz-opt.wrong, .qz-opt.correct.sel');
+    if (sel.length) { learner = Array.prototype.map.call(sel, scrapeOpt).join(', '); }
+    else { var inp = overlay.querySelector('.qz-input, input[type=text]'); if (inp && inp.value) learner = String(inp.value).slice(0, 240); }
+    interactions[idx] = {
+      id: String(cue.beatKey || ('q' + (idx + 1))).slice(0, 250),
+      type: scormType(q.type),
+      result: (q.type === 'likert') ? 'neutral' : (right ? 'correct' : 'incorrect'),
+      description: String(q.question || '').slice(0, 250),
+      learner: learner, correct: correct,
+    };
+  }
+
   if (QUIZZES.length > 0) {
     video.addEventListener('timeupdate', function() {
       if (overlay.classList.contains('open')) return;
@@ -2121,6 +2158,13 @@ ${QUIZ_ENGINE_JS}
       if (connected) {
         scorm.setStatus('completed');
         scorm.setScore(0, 100, pct);
+        // Per-question interactions → Moodle's Interactions report.
+        var n = 0;
+        for (var ii = 0; ii < interactions.length; ii++) {
+          if (interactions[ii]) scorm.setInteraction(n++, interactions[ii]);
+        }
+        // pass/fail against a 60% mastery threshold (only meaningful with a quiz).
+        if (QUIZZES.length > 0) scorm.setSuccess(pct >= 60);
         scorm.commit();
       }
       status.textContent = QUIZZES.length > 0
@@ -2445,6 +2489,8 @@ disconnect:function(){if(!f)return;if(f.version==='2004')f.api.Terminate('');els
 getLearnerId:function(){if(!f)return null;return f.version==='2004'?f.api.GetValue('cmi.learner_id'):f.api.LMSGetValue('cmi.core.student_id')},
 setStatus:function(s){if(!f)return;var k=f.version==='2004'?'cmi.completion_status':'cmi.core.lesson_status';if(f.version==='2004')f.api.SetValue(k,s);else f.api.LMSSetValue(k,s)},
 setScore:function(min,max,raw){if(!f)return;if(f.version==='2004'){f.api.SetValue('cmi.score.min',String(min));f.api.SetValue('cmi.score.max',String(max));f.api.SetValue('cmi.score.raw',String(raw));f.api.SetValue('cmi.score.scaled',String(raw/Math.max(1,max)))}else{f.api.LMSSetValue('cmi.core.score.min',String(min));f.api.LMSSetValue('cmi.core.score.max',String(max));f.api.LMSSetValue('cmi.core.score.raw',String(raw))}},
+setSuccess:function(passed){if(!f)return;if(f.version==='2004'){f.api.SetValue('cmi.success_status',passed?'passed':'failed')}else{f.api.LMSSetValue('cmi.core.lesson_status',passed?'passed':'failed')}},
+setInteraction:function(i,it){if(!f)return;var p='cmi.interactions.'+i+'.';if(f.version==='2004'){var S=function(k,v){try{f.api.SetValue(p+k,v)}catch(e){}};S('id',it.id);S('type',it.type);if(it.description)S('description',it.description);S('timestamp',new Date().toISOString());if(it.learner)S('learner_response',it.learner);if(it.correct)S('correct_responses.0.pattern',it.correct);S('result',it.result)}else{var L=function(k,v){try{f.api.LMSSetValue(p+k,v)}catch(e){}};L('id',it.id);L('type',it.type);if(it.learner)L('student_response',it.learner);if(it.correct)L('correct_responses.0.pattern',it.correct);L('result',it.result);var d=new Date(),z=function(n){return(n<10?'0':'')+n};L('time',z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds()))}},
 commit:function(){if(!f)return;if(f.version==='2004')f.api.Commit('');else f.api.LMSCommit('')}}}
 g.createScormApi=createScormApi})(window);`;
 
