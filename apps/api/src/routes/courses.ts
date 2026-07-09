@@ -6,6 +6,7 @@ import { CreateCourseSchema } from "@lp/shared";
 
 import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
+import { s3 } from "../lib/s3.js";
 
 /** All beat rows belonging to a course (via section → module → lesson). */
 async function beatsForCourse(courseId: string) {
@@ -106,6 +107,57 @@ export const coursesRoute = new Hono()
       targeted.push(b.beatKey);
     }
     return c.json({ ok: true, filter, beatKeys: onlyKeys.length ? onlyKeys : undefined, queued: targeted.length, beats: targeted });
+  })
+  .post("/:id/restore-animated", async (c) => {
+    /**
+     * FREE restore — for every beat whose CURRENT render is a static fallback
+     * (degraded when the designer provider was down), repoint its mp4Key to the
+     * most recent ANIMATED render still in S3 history, then re-stitch the
+     * affected lessons. Recovers the animation with ZERO provider calls.
+     * ?dryRun=1 reports what would change without mutating (use to see scope).
+     */
+    const id = c.req.param("id");
+    const course = await db.query.courses.findFirst({ where: eq(tables.courses.id, id) });
+    if (!course) return c.json({ error: "not_found" }, 404);
+    const dryRun = c.req.query("dryRun") === "1" || c.req.query("dryRun") === "true";
+
+    const beats = (await beatsForCourse(id)).filter((b) => !b.isAlt);
+    const restored: Array<{ beatKey: string; from: string; to: string }> = [];
+    const noHistory: string[] = [];
+    const lessonsTouched = new Set<string>();
+
+    for (const b of beats) {
+      if (!b.mp4Key || !b.mp4Key.endsWith("-static.mp4")) continue; // only degraded beats
+      const versions = (await s3.listObjects(`beats/${b.id}/renders/`, 50))
+        .filter((o) => o.key.endsWith("-animated.mp4"))
+        .sort((a, z) => z.key.localeCompare(a.key)); // newest timestamp first
+      const animated = versions[0];
+      if (!animated) { noHistory.push(b.beatKey); continue; }
+      restored.push({ beatKey: b.beatKey, from: b.mp4Key, to: animated.key });
+      lessonsTouched.add(b.lessonId);
+      if (!dryRun) {
+        await db.update(tables.beats).set({ mp4Key: animated.key, updatedAt: new Date() })
+          .where(eq(tables.beats.id, b.id));
+      }
+    }
+
+    if (!dryRun) {
+      for (const lessonId of lessonsTouched) {
+        await queues.stitch.add("restore-stitch", { lessonId });
+      }
+    }
+
+    return c.json({
+      ok: true,
+      dryRun,
+      restoredCount: restored.length,
+      lessonsRestitched: dryRun ? 0 : lessonsTouched.size,
+      restored,
+      noAnimatedHistory: noHistory,
+      note: dryRun
+        ? "dry run — nothing changed"
+        : `Repointed ${restored.length} beat(s) to animated history; re-stitching ${lessonsTouched.size} lesson(s)${course.autopilot ? " (autopilot will republish)" : " (publish manually — autopilot off)"}.`,
+    });
   })
   .post("/:id/stop", async (c) => {
     /** Turn off autopilot. In-flight jobs finish; nothing new auto-chains. */
