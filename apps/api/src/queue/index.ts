@@ -42,7 +42,7 @@ export const queues = {
   author: makeQueue<{ beatId: string; isRevision: boolean }>(QueueNames.Author),
   aiReview: makeQueue<{ beatId: string }>(QueueNames.AIReview),
   holistic: makeQueue<{ lessonId: string }>(QueueNames.Holistic),
-  render: makeQueue<{ beatId: string }>(QueueNames.Render),
+  render: makeQueue<{ beatId: string; staticOnly?: boolean; correctionNote?: string; referenceImageKey?: string }>(QueueNames.Render),
   stitch: makeQueue<{ lessonId: string }>(QueueNames.Stitch),
   audit: makeQueue<{ lessonId: string }>(QueueNames.Audit),
   scormBuild: makeQueue<{ lessonId: string }>(QueueNames.ScormBuild),

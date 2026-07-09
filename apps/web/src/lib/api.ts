@@ -65,7 +65,19 @@ export const api = {
   getBeat: (id: string) => fetchJson<{ beat: Beat; breadcrumbs: Breadcrumb[]; aiCostUsd: number }>(`/beats/${id}`),
   listBeatRenders: (id: string) => fetchJson<{ renders: Array<{ key: string; renderedAt: string | null; mode: string; sizeBytes: number }> }>(`/beats/${id}/renders`),
   authorBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/author`, { method: "POST" }),
-  renderBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/render`, { method: "POST" }),
+  renderBeat: (id: string, correction?: { correctionNote?: string; referenceImageKey?: string }) =>
+    fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/render`, { method: "POST", body: correction ? JSON.stringify(correction) : undefined }),
+  /** Unique frames of the beat's video (scene-change) + the 3 verify frames. */
+  getBeatKeyframes: (id: string) =>
+    fetchJson<{ frames: Array<{ key: string; timeSec: number }>; verifyFrames: Array<{ key: string; label: string }> }>(`/beats/${id}/keyframes`),
+  /** Upload a reference/annotated image for a correction; returns its S3 key. */
+  uploadBeatReferenceImage: async (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/beats/${id}/reference-image`, { method: "POST", body: fd });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+    return res.json() as Promise<{ ok: boolean; key: string }>;
+  },
   reviewBeat: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/beats/${id}/review`, { method: "POST" }),
   giveBeatFeedback: (id: string, input: { feedback: string; action: "approve" | "revise" | "reject"; screenshotKeys?: string[] }) =>
     fetchJson<{ ok: boolean; stage: BeatStage }>(`/beats/${id}/feedback`, { method: "POST", body: JSON.stringify(input) }),

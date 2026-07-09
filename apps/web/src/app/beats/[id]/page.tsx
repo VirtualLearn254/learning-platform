@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
@@ -66,6 +66,78 @@ function RenderHistory({ beatId }: { beatId: string }) {
           ))}
         </div>
       )}
+    </Card>
+  );
+}
+
+const fileUrl = (key: string) => `/api/files/${encodeURIComponent(key)}`;
+
+/**
+ * Fix-this-beat studio: a scrubbable video + a strip of the beat's UNIQUE
+ * frames (scene-change) to pinpoint the wrong moment, plus a correction note /
+ * annotated image that re-renders the beat (~$0.10) with the fix applied.
+ */
+function CorrectionStudio({ beatId, mp4Url, onRerender }: { beatId: string; mp4Url: string; onRerender: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const { data } = useSWR(`beat-keyframes-${beatId}`, () => api.getBeatKeyframes(beatId));
+  const [note, setNote] = useState("");
+  const [imageKey, setImageKey] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function seek(t: number) {
+    const v = videoRef.current;
+    if (v) { v.currentTime = t; v.pause(); }
+  }
+  async function onFile(f: File) {
+    setImagePreview(URL.createObjectURL(f));
+    try { const res = await api.uploadBeatReferenceImage(beatId, f); setImageKey(res.key); }
+    catch { setImagePreview(null); }
+  }
+  async function submit() {
+    setBusy(true);
+    try {
+      await api.renderBeat(beatId, { correctionNote: note.trim() || undefined, referenceImageKey: imageKey ?? undefined });
+      setNote(""); setImageKey(null); setImagePreview(null);
+      onRerender();
+    } finally { setBusy(false); }
+  }
+
+  const frames = data?.frames ?? [];
+  return (
+    <Card className="p-6">
+      <h3 className="font-semibold mb-1">Fix this beat</h3>
+      <p className="text-xs text-[var(--color-muted)] mb-3">
+        Scrub to the moment that&apos;s wrong (or click a keyframe to jump there), describe the fix — attach an annotated image if it helps — then re-render (~$0.10).
+      </p>
+      <video ref={videoRef} src={mp4Url} controls className="w-full rounded-lg border border-[var(--color-border)] bg-black aspect-video" />
+      {frames.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto mt-3 pb-1">
+          {frames.map((f, i) => (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <button key={i} onClick={() => seek(f.timeSec)} title={`${f.timeSec.toFixed(1)}s`} className="shrink-0 focus:outline-none">
+              <img src={fileUrl(f.key)} alt={`frame at ${f.timeSec.toFixed(1)}s`}
+                className="h-14 rounded border border-[var(--color-border)] hover:border-[var(--color-accent)]" />
+            </button>
+          ))}
+        </div>
+      )}
+      <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3}
+        placeholder="e.g. The exponent in the second line should be a superscript. Move the title up so it doesn't overlap the chart."
+        className="w-full mt-3 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm" />
+      <div className="flex items-center gap-3 mt-2">
+        <label className="text-xs text-[var(--color-muted)] hover:text-[var(--color-ink)] cursor-pointer border border-[var(--color-border)] rounded-md px-2 py-1">
+          Attach image
+          <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+        </label>
+        {imagePreview && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={imagePreview} alt="reference" className="h-8 rounded border border-[var(--color-border)]" />
+        )}
+        <Button className="ml-auto" disabled={busy || (!note.trim() && !imageKey)} onClick={submit}>
+          {busy ? "Re-rendering…" : "Re-render with correction"}
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -164,6 +236,10 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
                 </div>
               )}
             </Card>
+
+            {previewUrl && (
+              <CorrectionStudio beatId={id} mp4Url={previewUrl} onRerender={() => { notify({ title: "Re-render queued with your correction", variant: "success" }); mutate(); }} />
+            )}
 
             {beat.htmlKey && (
               <Card className="p-6">

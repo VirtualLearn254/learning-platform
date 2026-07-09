@@ -18,6 +18,63 @@ import puppeteer, { type Browser } from "puppeteer-core";
 
 const CHROMIUM_PATH = process.env.PUPPETEER_EXECUTABLE_PATH ?? "/usr/bin/chromium-browser";
 
+/**
+ * Extract the UNIQUE frames from a rendered beat MP4 — the handful of moments
+ * where the picture actually changes (reveals/transitions), not the ~1,200
+ * near-identical 30fps frames. Uses ffmpeg scene-change detection; the first
+ * frame is always included. Returns each frame's JPEG + its timestamp so the
+ * UI can seek the scrubber to it. Pure compute — no AI, ~1-3s.
+ */
+export async function extractKeyframes(
+  mp4: Buffer,
+  opts: { threshold?: number; max?: number; width?: number } = {},
+): Promise<Array<{ jpeg: Buffer; timeSec: number }>> {
+  const threshold = opts.threshold ?? 0.12;
+  const max = opts.max ?? 30;
+  const width = opts.width ?? 360;
+  const dir = await mkdtemp(join(tmpdir(), "keyframes-"));
+  const inPath = join(dir, "in.mp4");
+  try {
+    await writeFile(inPath, mp4);
+    // select first frame + scene changes; showinfo prints pts_time per output
+    // frame to stderr, in the same order as the numbered jpegs.
+    const filter = `select='eq(n\\,0)+gt(scene\\,${threshold})',scale=${width}:-1,showinfo`;
+    const stderr = await runFfmpegCapture([
+      "-y", "-i", inPath, "-vf", filter, "-vsync", "vfr", "-q:v", "5",
+      join(dir, "kf-%03d.jpg"),
+    ]);
+    const times = [...stderr.matchAll(/pts_time:([0-9.]+)/g)].map((m) => parseFloat(m[1]!));
+    const out: Array<{ jpeg: Buffer; timeSec: number }> = [];
+    for (let i = 0; i < times.length; i++) {
+      try {
+        const jpeg = await readFile(join(dir, `kf-${String(i + 1).padStart(3, "0")}.jpg`));
+        out.push({ jpeg, timeSec: times[i]! });
+      } catch { /* frame index gap — skip */ }
+    }
+    // Cap to `max`, keeping an even spread (always keep first + last).
+    if (out.length > max) {
+      const step = (out.length - 1) / (max - 1);
+      const picked: typeof out = [];
+      for (let i = 0; i < max; i++) picked.push(out[Math.round(i * step)]!);
+      return picked;
+    }
+    return out;
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Run ffmpeg and return its stderr text (scene-detect always exits 0). */
+function runFfmpegCapture(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const ff = spawn("ffmpeg", args);
+    let err = "";
+    ff.stderr.on("data", (b) => { err += b.toString(); });
+    ff.on("close", (code) => (code === 0 ? resolve(err) : reject(new Error(`ffmpeg exited ${code}: ${err.slice(-300)}`))));
+    ff.on("error", reject);
+  });
+}
+
 let browserSingleton: Browser | null = null;
 async function getBrowser(): Promise<Browser> {
   if (browserSingleton && browserSingleton.connected) return browserSingleton;

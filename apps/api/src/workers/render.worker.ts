@@ -41,6 +41,10 @@ interface JobData {
   beatId: string;
   /** Force the static-frame path (skip designer + HF). */
   staticOnly?: boolean;
+  /** Reviewer's re-render correction (from the beat-page edit panel). */
+  correctionNote?: string;
+  /** S3 key of an attached reference/annotated image for the correction. */
+  referenceImageKey?: string;
 }
 
 /** Feature flag: animated render on by default; RENDER_MODE=static disables. */
@@ -64,8 +68,8 @@ const RENDER_CONCURRENCY = Math.max(1, Math.min(6, Number(process.env.RENDER_CON
 
 export function startRenderWorker() {
   return new Worker<JobData>(QueueNames.Render, async (job) => {
-    const { beatId, staticOnly } = job.data;
-    console.log(`[render] start beat=${beatId}`);
+    const { beatId, staticOnly, correctionNote, referenceImageKey } = job.data;
+    console.log(`[render] start beat=${beatId}${correctionNote ? " (with correction)" : ""}`);
 
     const [jobRow] = await db.insert(tables.jobs).values({
       queue: "render",
@@ -148,6 +152,30 @@ export function startRenderWorker() {
           const siblingKeys = (await db.select().from(tables.beats).where(eq(tables.beats.lessonId, beat.lessonId))).filter(b=>!b.isAlt).map(b=>b.beatKey);
           const designBrief = await ensureDesignBrief(ai, beat.lessonId, { lessonTitle, styleHint: visual.style ?? styleHints?.style, beatKeys: siblingKeys }) ?? undefined;
 
+          // Reviewer correction (from the beat-page edit panel). A text note
+          // goes straight to the designer; an attached reference/annotated
+          // image is first turned into a precise instruction by the vision
+          // verifier, then merged with the note — so the (text-only) designer
+          // gets one clear fix. Best-effort: image failure falls back to text.
+          let correction = correctionNote?.trim() || undefined;
+          if (referenceImageKey) {
+            try {
+              await note("interpreting reference image (vision)");
+              const img = await s3.getObject(referenceImageKey);
+              const mediaType = referenceImageKey.toLowerCase().endsWith(".png") ? "image/png" as const : "image/jpeg" as const;
+              const vis = await ai.vision("verifier", {
+                meta: { beatId, lessonId: beat.lessonId },
+                system: "You convert a reviewer's reference or annotated image (plus an optional note) into ONE precise visual instruction for a motion-graphics designer. Describe only the change to make — position, text, colour, size, what to add/remove. No preamble, one or two sentences.",
+                prompt: `Beat "${beat.beatKey}". Reviewer note: ${correctionNote || "(the change is shown in the image)"}. State the exact visual change to apply.`,
+                images: [{ base64: Buffer.from(img.body).toString("base64"), mediaType }],
+              });
+              correction = [correctionNote?.trim(), vis.text.trim()].filter(Boolean).join(" — ");
+            } catch (imgErr) {
+              console.warn(`[render:${jobId.slice(0, 8)}] reference-image vision failed, using text note only:`, imgErr instanceof Error ? imgErr.message : imgErr);
+            }
+          }
+          if (correction) await note(`applying correction: ${correction.slice(0, 100)}`);
+
           const designInput: DesignBeatInput = {
             beatKey: beat.beatKey,
             beatType: beat.beatType,
@@ -162,6 +190,7 @@ export function startRenderWorker() {
             meta: { beatId, lessonId: beat.lessonId },
             operatorRules,
             designBrief,
+            correction,
           };
           const design = await designAnimatedBeat(ai, designInput, note);
           let finalHtml = design.html;

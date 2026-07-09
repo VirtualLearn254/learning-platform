@@ -45,6 +45,10 @@ export interface DesignBeatInput {
   operatorRules?: string;
   /** Per-lesson visual-language brief — shared design system for sibling beats. */
   designBrief?: string;
+  /** Reviewer's correction for a re-render — a specific fix to apply, from the
+   *  beat page's edit panel (text, or a vision-derived instruction from an
+   *  attached reference image). Highest priority in the design. */
+  correction?: string;
 }
 
 const SYSTEM_PROMPT = `You are a motion designer authoring HyperFrames video compositions — HTML files that a capture engine renders frame-by-frame into MP4. You design educational explainer beats for an adult professional audience: editorial, confident, never cartoonish.
@@ -203,7 +207,10 @@ export function buildDesignerPrompt(input: DesignBeatInput): { system: string; u
   const settleAt = Math.max(1, dur - 1).toFixed(1);
   const palette = STYLE_PALETTES[input.styleHint ?? ""] ?? STYLE_PALETTES["swiss-grid"]!;
   const skeleton = buildSkeleton(palette, dur);
-  const system = SYSTEM_PROMPT + (input.operatorRules ?? "");
+  const correctionBlock = input.correction
+    ? `\n\n## CORRECTION REQUESTED (HIGHEST PRIORITY — a reviewer flagged a specific problem with the last render; fix exactly this while keeping everything else intact):\n${input.correction}`
+    : "";
+  const system = SYSTEM_PROMPT + (input.operatorRules ?? "") + correctionBlock;
 
   const user = `Design the composition for this beat.
 

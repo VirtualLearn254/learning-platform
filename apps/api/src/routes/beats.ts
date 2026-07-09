@@ -18,6 +18,7 @@ import { db, tables } from "../db/index.js";
 import { queues } from "../queue/index.js";
 import { breadcrumbsForBeat } from "../lib/breadcrumbs.js";
 import { s3 } from "../lib/s3.js";
+import { extractKeyframes } from "../lib/render.js";
 
 export const beatsRoute = new Hono()
   .get("/", async (c) => {
@@ -74,8 +75,51 @@ export const beatsRoute = new Hono()
     const id = c.req.param("id");
     const beat = await db.query.beats.findFirst({ where: eq(tables.beats.id, id) });
     if (!beat) return c.json({ error: "not_found" }, 404);
-    const job = await queues.render.add("render-beat", { beatId: id });
+    // Optional body: a reviewer correction to apply on this re-render.
+    const body = await c.req.json().catch(() => ({} as Record<string, unknown>));
+    const correctionNote = typeof body.correctionNote === "string" ? body.correctionNote.slice(0, 2000) : undefined;
+    const referenceImageKey = typeof body.referenceImageKey === "string" ? body.referenceImageKey : undefined;
+    const job = await queues.render.add("render-beat", { beatId: id, correctionNote, referenceImageKey });
     return c.json({ ok: true, jobId: job.id });
+  })
+  .get("/:id/keyframes", async (c) => {
+    /** The UNIQUE frames of the beat's video (scene-change detection), cached.
+     *  Plus the 3 verify frames. Pure ffmpeg — no AI. */
+    const id = c.req.param("id");
+    const beat = await db.query.beats.findFirst({ where: eq(tables.beats.id, id) });
+    if (!beat) return c.json({ error: "not_found" }, 404);
+    const verifyFrames = [1, 2, 3].map((i) => ({ key: `beats/${id}/verify-${i}.png`, label: ["entrance", "hero", "settle"][i - 1]! }));
+    if (!beat.mp4Key) return c.json({ frames: [], verifyFrames });
+    const manifestKey = `beats/${id}/keyframes/manifest.json`;
+    try {
+      const m = JSON.parse(Buffer.from((await s3.getObject(manifestKey)).body).toString("utf8"));
+      if (m.sourceMp4Key === beat.mp4Key) return c.json({ frames: m.frames, verifyFrames });
+    } catch { /* stale or absent — regenerate */ }
+    const mp4 = Buffer.from((await s3.getObject(beat.mp4Key)).body);
+    const kf = await extractKeyframes(mp4);
+    const frames: Array<{ key: string; timeSec: number }> = [];
+    for (let i = 0; i < kf.length; i++) {
+      const key = `beats/${id}/keyframes/kf-${String(i).padStart(3, "0")}.jpg`;
+      await s3.putObject(key, kf[i]!.jpeg, { contentType: "image/jpeg" });
+      frames.push({ key, timeSec: kf[i]!.timeSec });
+    }
+    await s3.putObject(manifestKey, Buffer.from(JSON.stringify({ sourceMp4Key: beat.mp4Key, frames })), { contentType: "application/json" });
+    return c.json({ frames, verifyFrames });
+  })
+  .post("/:id/reference-image", async (c) => {
+    /** Upload a reviewer's reference/annotated image for a correction. */
+    const id = c.req.param("id");
+    const beat = await db.query.beats.findFirst({ where: eq(tables.beats.id, id) });
+    if (!beat) return c.json({ error: "not_found" }, 404);
+    const form = await c.req.parseBody();
+    const file = form["file"];
+    if (!(file instanceof File)) return c.json({ error: "no file" }, 400);
+    const buf = Buffer.from(await file.arrayBuffer());
+    if (buf.length > 8 * 1024 * 1024) return c.json({ error: "image too large (max 8MB)" }, 413);
+    const isPng = file.type === "image/png" || file.name.toLowerCase().endsWith(".png");
+    const key = `beats/${id}/corrections/${Date.now()}.${isPng ? "png" : "jpg"}`;
+    await s3.putObject(key, buf, { contentType: isPng ? "image/png" : "image/jpeg" });
+    return c.json({ ok: true, key });
   })
   .post("/:id/review", async (c) => {
     /** Re-run the per-beat AI review. */
