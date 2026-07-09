@@ -51,12 +51,28 @@ export const MODEL_CATALOG: Record<ProviderId, ModelInfo[]> = {
   ],
 };
 
-/** Compute USD cost for a call given the model and tokens used. */
+/** Which provider's catalog lists this model id? Lets usage logging price a
+ *  call even when the role was overridden to a provider outside its default
+ *  preferred chain (e.g. designer → Fireworks GLM). Returns null if unknown. */
+export function providerForModel(modelId: string): ProviderId | null {
+  for (const [provider, models] of Object.entries(MODEL_CATALOG) as [ProviderId, ModelInfo[]][]) {
+    if (models.some((m) => m.id === modelId)) return provider;
+  }
+  return null;
+}
+
+/** Compute USD cost for a call given the model and tokens used. Falls back to
+ *  a global model→provider lookup so a mis-attributed provider (inference
+ *  guessed wrong) still gets priced from the model's real rate card. */
 export function computeCost(providerId: ProviderId, modelId: string, inputTokens: number, outputTokens: number): number {
-  const info = MODEL_CATALOG[providerId]?.find((m) => m.id === modelId);
+  let info = MODEL_CATALOG[providerId]?.find((m) => m.id === modelId);
   if (!info) {
-    // Unknown model — return 0 rather than crash the call. The usage row
-    // still logs the token counts; cost can be backfilled later.
+    const realProvider = providerForModel(modelId);
+    if (realProvider) info = MODEL_CATALOG[realProvider].find((m) => m.id === modelId);
+  }
+  if (!info) {
+    // Genuinely unknown model — return 0 rather than crash the call. The usage
+    // row still logs the token counts; cost can be backfilled later.
     return 0;
   }
   return (inputTokens / 1_000_000) * info.inputPer1M + (outputTokens / 1_000_000) * info.outputPer1M;

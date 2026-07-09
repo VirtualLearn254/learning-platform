@@ -46,6 +46,16 @@ interface JobData {
 /** Feature flag: animated render on by default; RENDER_MODE=static disables. */
 const ANIMATED_ENABLED = (process.env.RENDER_MODE ?? "animated") !== "static";
 
+/** Is this a provider-availability failure (account/billing/quota/auth), as
+ *  opposed to a content error? Such errors mean the designer is DOWN — we must
+ *  not paper over them with a static frame for every beat. Matches the shapes
+ *  Fireworks/Anthropic/OpenAI return: HTTP 401/402/403/429, plus the telltale
+ *  billing phrases. */
+function isProviderUnavailable(msg: string): boolean {
+  return /\b(401|402|403|412|429)\b/.test(msg)
+    || /suspend|spending limit|spend cap|quota|insufficient|billing|payment required|rate limit|over.?loaded|unauthorized|invalid api key|account is/i.test(msg);
+}
+
 /** Parallel render jobs. 2 is the proven-stable setting for a 6vCPU/12GB box
  *  (4 caused ~9% Chrome crashes on this hardware class). 3 may work because
  *  each job spends 1-2 min in the network-bound design phase — raise via
@@ -220,7 +230,18 @@ export function startRenderWorker() {
           await note(`animated MP4 ${(mp4.length / 1024 / 1024).toFixed(2)} MB`);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          console.warn(`[render:${jobId.slice(0, 8)}] animated path failed, falling back to static:`, msg);
+          // A PROVIDER-LEVEL failure (account suspended, spend cap, quota, rate
+          // limit, auth) means the designer is unavailable — NOT that this beat
+          // is unrenderable. Falling back to a static frame here would silently
+          // mass-degrade every beat to a plain slide while the provider is down
+          // (this is exactly what drained Fireworks unnoticed). Fail LOUD so the
+          // render is retried/surfaced and no degraded beat is shipped. Content
+          // errors (bad HTML, verify failures) still fall back to static below.
+          if (isProviderUnavailable(msg)) {
+            await note(`designer provider unavailable — refusing to ship a degraded static beat: ${msg.slice(0, 120)}`);
+            throw new Error(`designer provider unavailable (no silent static fallback): ${msg.slice(0, 200)}`);
+          }
+          console.warn(`[render:${jobId.slice(0, 8)}] animated path failed (content), falling back to static:`, msg);
           animatedFailReason = msg.slice(0, 300);
           await note(`animated failed (${msg.slice(0, 100)}) — falling back to static frame`);
           mp4 = null;

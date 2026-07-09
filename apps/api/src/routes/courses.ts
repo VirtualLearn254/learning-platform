@@ -75,6 +75,38 @@ export const coursesRoute = new Hono()
     }
     return c.json({ ok: true, autopilot: true, authorQueued, renderQueued, totalBeats: beats.length });
   })
+  .post("/:id/rerender", async (c) => {
+    /**
+     * SURGICAL re-render — re-queue render for a TARGETED subset of a course's
+     * beats, never the whole thing. Avoids the "re-ran the whole course to fix
+     * a few beats" trap that drains the designer provider.
+     *   ?filter=static  (default) — beats whose current render is a static
+     *                    fallback (degraded) OR that have no render yet
+     *   ?filter=missing — only beats with no render
+     *   ?filter=all     — every main beat (use sparingly)
+     *   ?beatKeys=a,b,c — restrict to these beat keys (most surgical)
+     * Downstream stitch + publish auto-chain per lesson as renders complete.
+     */
+    const id = c.req.param("id");
+    const course = await db.query.courses.findFirst({ where: eq(tables.courses.id, id) });
+    if (!course) return c.json({ error: "not_found" }, 404);
+
+    const filter = (c.req.query("filter") ?? "static") as "static" | "missing" | "all";
+    const onlyKeys = (c.req.query("beatKeys") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+
+    const beats = await beatsForCourse(id);
+    const targeted: string[] = [];
+    for (const b of beats.filter((b) => !b.isAlt)) {
+      if (onlyKeys.length && !onlyKeys.includes(b.beatKey)) continue;
+      const missing = !b.mp4Key;
+      const isStaticFallback = !!b.mp4Key && b.mp4Key.endsWith("-static.mp4");
+      const take = filter === "all" ? true : filter === "missing" ? missing : (missing || isStaticFallback);
+      if (!take) continue;
+      await queues.render.add("surgical-render", { beatId: b.id });
+      targeted.push(b.beatKey);
+    }
+    return c.json({ ok: true, filter, beatKeys: onlyKeys.length ? onlyKeys : undefined, queued: targeted.length, beats: targeted });
+  })
   .post("/:id/stop", async (c) => {
     /** Turn off autopilot. In-flight jobs finish; nothing new auto-chains. */
     const id = c.req.param("id");

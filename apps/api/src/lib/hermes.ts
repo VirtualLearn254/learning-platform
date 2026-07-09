@@ -87,10 +87,17 @@ Reply with ONLY JSON: {"proposals":[{"scope":"...","rule":"...","evidence":"one-
         if (parsed.success) proposals = parsed.data.proposals;
       }
 
-      // Skip proposals that duplicate existing rules (naive text overlap).
+      // Skip proposals that duplicate existing rules (naive text overlap)…
       const existing = await db.select().from(tables.pipelineRules);
-      const fresh = proposals.filter((p) =>
-        !existing.some((e) => e.scope === p.scope && similar(e.rule, p.rule)));
+      const fresh: typeof proposals = [];
+      for (const p of proposals) {
+        if (existing.some((e) => e.scope === p.scope && similar(e.rule, p.rule))) continue;
+        // …AND that duplicate an earlier proposal in THIS same batch — the
+        // model often emits two near-identical rules in one run, which the
+        // existing-only check let straight through.
+        if (fresh.some((f) => f.scope === p.scope && similar(f.rule, p.rule))) continue;
+        fresh.push(p);
+      }
 
       for (const p of fresh) {
         await db.insert(tables.pipelineRules).values({

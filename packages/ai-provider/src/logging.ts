@@ -8,7 +8,7 @@
 
 import type { AIClient, ChatResponse } from "./index.js";
 import { profiles, type Profile, type ProviderId } from "./profiles.js";
-import { computeCost } from "./catalog.js";
+import { computeCost, providerForModel } from "./catalog.js";
 
 export interface UsageEvent {
   profileId: string;
@@ -30,12 +30,18 @@ export function withLogging(client: AIClient, hook: UsageHook): AIClient {
   function inferProvider(profileId: string, returnedModel: string): ProviderId | "unknown" {
     const profile = profiles[profileId as Profile];
     if (!profile) return "unknown";
-    // Reverse-map by checking which provider's model id matches.
-    for (const provider of profile.preferred) {
-      if (profile.modelByProvider[provider] === returnedModel) return provider;
+    // Reverse-map by the returned model id. Check EVERY provider the profile
+    // can address (modelByProvider), NOT just `preferred` — an operator can
+    // override a role to a provider outside its default chain (e.g. designer →
+    // Fireworks), and attributing that to preferred[0] mis-prices it to $0.
+    for (const [provider, model] of Object.entries(profile.modelByProvider)) {
+      if (model === returnedModel) return provider as ProviderId;
     }
-    // Returned model didn't match any provider's expected id — fall back to
-    // the first provider in the preference order (best guess).
+    // Still no match? Look the model up in the global catalog (covers any
+    // provider, even ones not listed on this profile).
+    const global = providerForModel(returnedModel);
+    if (global) return global;
+    // Last resort — first preferred provider (best guess).
     return profile.preferred[0] ?? "unknown";
   }
 
