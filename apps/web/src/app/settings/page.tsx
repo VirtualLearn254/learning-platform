@@ -21,122 +21,12 @@ export default function SettingsPage() {
         <div className="space-y-6 max-w-5xl">
           <AIProvidersCard />
           <AIRolesCard />
-          <PipelineRulesCard />
           <AIUsageCard />
           <NotificationsCard />
           <BrandingCard />
         </div>
       </PageBody>
     </AppShell>
-  );
-}
-
-// ─── Pipeline rules (institutional memory) ───────────────────────────
-
-interface PipelineRule {
-  id: string;
-  scope: "author" | "designer" | "reviewer" | "ingest";
-  rule: string;
-  origin: string;
-  active: boolean;
-  createdAt: string;
-}
-
-function PipelineRulesCard() {
-  const { data, mutate } = useSWR("pipeline-rules", async () => {
-    const res = await fetch("/api/rules");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json() as Promise<{ rules: PipelineRule[] }>;
-  });
-  const [scope, setScope] = useState<PipelineRule["scope"]>("designer");
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const rules = data?.rules ?? [];
-  const pending = rules.filter((r) => !r.active && r.origin.startsWith("hermes"));
-  const active = rules.filter((r) => r.active);
-
-  async function call(method: string, path: string, body?: unknown) {
-    setBusy(true);
-    try {
-      await fetch(`/api${path}`, {
-        method,
-        headers: { "content-type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      await mutate();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Pipeline rules</CardTitle>
-        <p className="text-sm text-[var(--color-muted)]">
-          Institutional memory: each rule is appended to its role's AI prompt on every future call.
-          Corrections become durable here instead of being repeated. Hermes proposals appear as pending.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {pending.length > 0 && (
-          <div className="border border-[var(--color-accent)] rounded-xl p-4 space-y-2">
-            <p className="text-sm font-semibold">Hermes proposals ({pending.length})</p>
-            {pending.map((r) => (
-              <div key={r.id} className="flex items-start gap-3 text-sm">
-                <span className="font-mono text-xs text-[var(--color-muted)] mt-0.5 w-16 shrink-0">{r.scope}</span>
-                <div className="flex-1 min-w-0">
-                  <p>{r.rule}</p>
-                  <p className="text-xs text-[var(--color-muted)] mt-0.5">{r.origin}</p>
-                </div>
-                <Button size="sm" disabled={busy} onClick={() => call("PATCH", `/rules/${r.id}`, { active: true })}>Adopt</Button>
-                <Button size="sm" variant="secondary" disabled={busy} onClick={() => call("DELETE", `/rules/${r.id}`)}>Dismiss</Button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex gap-2 items-start">
-          <select
-            value={scope}
-            onChange={(e) => setScope(e.target.value as PipelineRule["scope"])}
-            className="border border-[var(--color-border)] rounded-lg px-2 py-2 text-sm bg-white"
-          >
-            {(["author", "designer", "reviewer", "ingest"] as const).map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder='e.g. "Never place two stats in the same quadrant of the frame"'
-            className="flex-1"
-          />
-          <Button
-            disabled={busy || text.trim().length < 5}
-            onClick={async () => { await call("POST", "/rules", { scope, rule: text.trim() }); setText(""); }}
-          >
-            Add rule
-          </Button>
-        </div>
-
-        {active.length === 0 ? (
-          <p className="text-sm text-[var(--color-muted)]">No active rules yet. Add one above, or run Hermes to mine your feedback history.</p>
-        ) : (
-          <ul className="divide-y divide-[var(--color-border)]">
-            {active.map((r) => (
-              <li key={r.id} className="py-2.5 flex items-start gap-3 text-sm">
-                <span className="font-mono text-xs text-[var(--color-muted)] mt-0.5 w-16 shrink-0">{r.scope}</span>
-                <p className="flex-1 min-w-0">{r.rule}</p>
-                <Button size="sm" variant="secondary" disabled={busy} onClick={() => call("PATCH", `/rules/${r.id}`, { active: false })}>Disable</Button>
-                <Button size="sm" variant="secondary" disabled={busy} onClick={() => call("DELETE", `/rules/${r.id}`)}>Delete</Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
