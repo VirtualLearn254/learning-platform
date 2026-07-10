@@ -10,6 +10,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { VideoPlayer } from "@/components/video-player";
 import { BeatRow } from "@/components/beat-row";
+import { BeatCard } from "@/components/beat-card";
+import { ViewToggle, useViewMode } from "@/components/view-toggle";
 import { ContextStrip, Chip } from "@/components/context-strip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReviewIssues } from "@/components/review-issues";
@@ -48,6 +50,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
   const { data, error, mutate, isLoading } = useSWR(`lesson-${id}`, () => api.getLesson(id), { refreshInterval: 5000 });
   const cid = data?.breadcrumbs?.find((c) => c.kind === "course")?.id;
   const { data: treeData } = useSWR(cid ? `course-tree-${cid}` : null, () => api.getCourseTree(cid!));
+  const [beatView, setBeatView] = useViewMode("lp_view_lesson_beats");
   const { notify } = useToast();
 
   async function authorAll(reauthor = false) {
@@ -302,18 +305,33 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
           )}
 
           <Card className="p-6">
-            <h3 className="font-semibold mb-3">Beats ({mainBeats.length})</h3>
-            <div className="-mx-1">
-              {mainBeats.map((b) => <BeatRow key={b.id} beat={b} onAction={() => mutate()} />)}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold">Beats ({mainBeats.length})</h3>
+              <ViewToggle mode={beatView} onChange={setBeatView} />
             </div>
+            {beatView === "grid" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {mainBeats.map((b) => <BeatCard key={b.id} beat={b} onAction={() => mutate()} />)}
+              </div>
+            ) : (
+              <div className="-mx-1">
+                {mainBeats.map((b) => <BeatRow key={b.id} beat={b} onAction={() => mutate()} />)}
+              </div>
+            )}
           </Card>
 
           {altBeats.length > 0 && (
             <Card className="p-6">
               <h3 className="font-semibold mb-3">Alt beats — scenario branches ({altBeats.length})</h3>
-              <div className="-mx-1">
-                {altBeats.map((b) => <BeatRow key={b.id} beat={b} />)}
-              </div>
+              {beatView === "grid" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {altBeats.map((b) => <BeatCard key={b.id} beat={b} />)}
+                </div>
+              ) : (
+                <div className="-mx-1">
+                  {altBeats.map((b) => <BeatRow key={b.id} beat={b} />)}
+                </div>
+              )}
             </Card>
           )}
         </div>

@@ -60,7 +60,9 @@ export default function KanbanPage() {
         ) : isLoading || !data ? (
           <Skeleton className="w-full h-96" />
         ) : (
-          <KanbanBoard beats={data.beats} onAction={() => mutate()} />
+          <div className="h-full min-h-0">
+            <KanbanBoard beats={data.beats} onAction={() => mutate()} />
+          </div>
         )}
       </PageBody>
     </AppShell>

@@ -25,15 +25,18 @@ export function KanbanBoard({ beats, onAction }: { beats: Beat[]; onAction?: () 
   for (const b of beats) byStage[b.stage].push(b);
 
   return (
-    <div className="overflow-x-auto -mx-12 px-12 pb-4">
-      <div className="flex gap-4 min-w-max">
+    /* Fills the page height; the PAGE never grows with the tallest column —
+       each column scrolls its own cards independently (up/down within the
+       column), with only horizontal scrolling at the board level. */
+    <div className="h-full overflow-x-auto -mx-12 px-12">
+      <div className="flex gap-4 min-w-max h-full pb-2">
         {COLUMNS.map((col) => (
-          <div key={col.stage} className="w-72 shrink-0">
-            <div className="flex items-center justify-between mb-3 px-1">
+          <div key={col.stage} className="w-72 shrink-0 flex flex-col h-full min-h-0">
+            <div className="shrink-0 flex items-center justify-between mb-2 px-1">
               <h3 className="text-sm font-semibold text-[var(--color-ink)]">{col.label}</h3>
               <span className="text-xs text-[var(--color-muted)] tabular-nums">{byStage[col.stage].length}</span>
             </div>
-            <div className="space-y-2 min-h-[100px] bg-[var(--color-bg)] rounded-xl p-2 border border-[var(--color-border)]">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 bg-[var(--color-bg)] rounded-xl p-2 border border-[var(--color-border)]">
               {byStage[col.stage].length === 0 && (
                 <p className="text-xs text-[var(--color-muted)] py-8 text-center">—</p>
               )}

@@ -7,6 +7,7 @@ import { Play, Square } from "lucide-react";
 
 import { api, type JobSummary } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
+import { ViewToggle, useViewMode } from "@/components/view-toggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,7 @@ function duration(startedAt: string | null, endedAt: string | null): string {
 
 export default function CourseDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const [lessonView, setLessonView] = useViewMode("lp_view_course_lessons");
   const { data: materialsData, mutate: refreshMaterials } = useSWR(
     `materials-${id}`,
     () => api.listMaterials(id),
@@ -160,6 +162,7 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
           <Card className="p-5 mb-6 space-y-2">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-semibold text-sm">Pipeline</h3>
+              <span className="ml-auto"><ViewToggle mode={lessonView} onChange={setLessonView} /></span>
               {autopilot && (
                 <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
@@ -167,6 +170,27 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
                 </span>
               )}
             </div>
+            {lessonView === "grid" ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+              {lessonLanes.map((l) => (
+                <Link key={l.id} href={`/lessons/${l.id}`}
+                  className="block rounded-xl border border-[var(--color-border)] p-4 hover:border-[var(--color-ink)] transition-colors bg-white">
+                  <p className="font-medium text-sm truncate">{l.title}</p>
+                  <div className="h-2 bg-[var(--color-bg)] rounded overflow-hidden my-2 border border-[var(--color-border)]">
+                    <div className="h-full bg-[var(--color-accent)] transition-all"
+                         style={{ width: l.total ? `${(l.rendered / l.total) * 100}%` : "0%" }} />
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="text-[var(--color-muted)] tabular-nums">{l.rendered}/{l.total} rendered</span>
+                    {l.failed > 0 && <span className="px-1.5 py-0.5 rounded bg-red-50 text-[var(--color-accent-2)]">{l.failed} failed</span>}
+                    {l.needsReview > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">{l.needsReview} to review</span>}
+                    {l.inFlight > 0 && <span className="text-[var(--color-muted)]">{l.inFlight} in flight</span>}
+                    {l.published && <span className="text-[var(--color-accent)]">✓ published</span>}
+                  </div>
+                </Link>
+              ))}
+            </div>
+            ) : (<>
             {lessonLanes.map((l) => (
               <div key={l.id} className="flex items-center gap-3 text-sm">
                 <Link href={`/lessons/${l.id}`} className="w-56 truncate hover:text-[var(--color-accent)] transition-colors shrink-0">
@@ -198,6 +222,7 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
                 ) : null}
               </div>
             ))}
+            </>)}
           </Card>
         )}
 
