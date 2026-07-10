@@ -93,6 +93,14 @@ export const api = {
   listBeatJobs: (beatId: string) =>
     fetchJson<{ jobs: Array<{ id: string; queue: string; status: string; attempts: number; startedAt: string | null; endedAt: string | null; etaSeconds: number | null; errorMessage: string | null; createdAt: string }> }>(`/jobs?beatId=${beatId}`),
 
+  // Attempts (LP-16 results store)
+  attemptLessons: () =>
+    fetchJson<{ lessons: Array<{ lessonId: string; lessonTitle: string; attempts: number; learners: number; avgScore: number; lastAttemptAt: string }> }>("/attempts/lessons"),
+  listAttempts: (lessonId: string) =>
+    fetchJson<{ attempts: Array<{ id: string; learnerId: string; learnerName: string | null; source: string; scorePct: number; correctCount: number; totalQuestions: number; points: number; durationSec: number | null; createdAt: string; interactions: Array<{ id: string; type: string; result: string; description?: string; learner?: string; correct?: string }> }> }>(`/attempts?lessonId=${lessonId}`),
+  attemptSummary: (lessonId: string) =>
+    fetchJson<{ attempts: number; avgScore: number; passRate: number; questions: Array<{ id: string; type: string; description: string; total: number; correctPct: number; commonWrong: Array<{ answer: string; count: number }> }> }>(`/attempts/summary?lessonId=${lessonId}`),
+
   // Concepts
   conceptsByCourse: (courseId: string) =>
     fetchJson<{ concepts: Array<{ concept: string; taughtBy: string[]; requiredBy: string[] }> }>(`/concepts/by-course/${courseId}`),

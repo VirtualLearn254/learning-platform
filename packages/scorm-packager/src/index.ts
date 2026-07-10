@@ -1658,7 +1658,7 @@ window.__quizEngine = (function() {
  *   - Marks incomplete + disconnects on unload
  *   - Records session_time via native LMS clock (no manual tracking needed)
  */
-function buildPlayerHtml(lesson: { title: string }, quizzes: ScormQuizCue[], quizSkinCss?: string): string {
+function buildPlayerHtml(lesson: { id?: string; title: string }, quizzes: ScormQuizCue[], quizSkinCss?: string, attemptsUrl?: string): string {
   const title = htmlEscape(lesson.title);
   const quizJson = JSON.stringify(quizzes).replace(/</g, "\\u003c");
   const skin = quizSkinCss ? `<style id="quiz-skin">\n${quizSkinCss.replace(/<\//g, "<\\/")}\n</style>` : "";
@@ -1837,10 +1837,47 @@ ${QUIZ_ENGINE_JS}
 <script>
 (function() {
   var QUIZZES = ${quizJson};
+  var LESSON_ID = ${JSON.stringify(lesson.id ?? "")};
+  var ATTEMPTS_URL = ${JSON.stringify(attemptsUrl ?? "")};
   var scorm = window.createScormApi();
   var status = document.getElementById('status');
   var connected = scorm.connect();
   status.textContent = connected ? 'connected · in progress' : 'standalone (no LMS)';
+  var startedAtMs = Date.now();
+
+  // ── Learner identity for the standalone attempts store (LP-16) ──
+  // LMS-run: the SCORM learner id. Standalone: ?learner=Name in the URL,
+  // else a persistent anonymous id so repeat visits group per browser.
+  function learnerIdentity() {
+    var lmsId = connected ? scorm.getLearnerId() : null;
+    if (lmsId) return { id: 'scorm:' + lmsId, name: null };
+    try {
+      var qp = new URLSearchParams(location.search).get('learner');
+      if (qp) return { id: 'name:' + qp.toLowerCase().replace(/\\s+/g, '_').slice(0, 80), name: qp.slice(0, 120) };
+      var anon = localStorage.getItem('lp_learner');
+      if (!anon) { anon = 'anon:' + Math.random().toString(36).slice(2, 12); localStorage.setItem('lp_learner', anon); }
+      return { id: anon, name: null };
+    } catch (e) { return { id: 'anon:unknown', name: null }; }
+  }
+
+  // POST the completed attempt to OUR results store — in addition to SCORM.
+  // Best-effort and silent: a failed POST never affects playback or the LMS.
+  function reportAttempt(pct, ints) {
+    if (!ATTEMPTS_URL || !LESSON_ID) return;
+    var who = learnerIdentity();
+    var payload = {
+      lessonId: LESSON_ID, learnerId: who.id, learnerName: who.name || undefined,
+      source: connected ? 'scorm' : 'standalone',
+      scorePct: pct, correctCount: correctCount, totalQuestions: QUIZZES.length,
+      points: points, durationSec: Math.min(86400, Math.round((Date.now() - startedAtMs) / 1000)),
+      interactions: ints,
+    };
+    try {
+      var body = JSON.stringify(payload);
+      if (navigator.sendBeacon && navigator.sendBeacon(ATTEMPTS_URL, new Blob([body], { type: 'application/json' }))) return;
+      fetch(ATTEMPTS_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body, keepalive: true }).catch(function() {});
+    } catch (e) { /* never break playback over reporting */ }
+  }
 
   var video = document.getElementById('v');
   var overlay = document.getElementById('qz');
@@ -2124,6 +2161,8 @@ ${QUIZ_ENGINE_JS}
     var sel = overlay.querySelectorAll('.qz-opt.sel, .qz-opt.wrong, .qz-opt.correct.sel');
     if (sel.length) { learner = Array.prototype.map.call(sel, scrapeOpt).join(', '); }
     else { var inp = overlay.querySelector('.qz-input, input[type=text]'); if (inp && inp.value) learner = String(inp.value).slice(0, 240); }
+    // A correct answer that the scrape missed IS the correct answer.
+    if (!learner && right) learner = correct;
     interactions[idx] = {
       id: String(cue.beatKey || ('q' + (idx + 1))).slice(0, 250),
       type: scormType(q.type),
@@ -2167,6 +2206,8 @@ ${QUIZ_ENGINE_JS}
         if (QUIZZES.length > 0) scorm.setSuccess(pct >= 60);
         scorm.commit();
       }
+      // Our own results store gets the attempt in BOTH modes (LMS + standalone).
+      reportAttempt(pct, interactions.filter(function(x) { return !!x; }));
       status.textContent = QUIZZES.length > 0
         ? 'complete · score ' + pct + '% (' + correctCount + '/' + QUIZZES.length + ') · ' + points + ' pts'
         : 'complete';
@@ -2569,6 +2610,11 @@ export interface ScormBuildInput {
   quizSkinCss?: string;
   /** SCORM version target. 2004 4th Ed is the default and recommended. */
   version?: "2004_4";
+  /** Where the player POSTs the completed attempt (our standalone results
+   *  store, LP-16). Relative ("/api/xapi/attempts") works for previews served
+   *  from our origin; pass an absolute URL for LMS-hosted zips. Omit to
+   *  disable attempt reporting. */
+  attemptsUrl?: string;
 }
 
 export interface ScormBuildOutput {
@@ -2591,7 +2637,7 @@ export interface ScormPackager {
 export function createScormPackager(): ScormPackager {
   return {
     async build(input) {
-      const playerHtml = buildPlayerHtml(input.lesson, input.quizzes ?? [], input.quizSkinCss);
+      const playerHtml = buildPlayerHtml(input.lesson, input.quizzes ?? [], input.quizSkinCss, input.attemptsUrl);
       const zip = new JSZip();
       zip.file("imsmanifest.xml", buildManifest(input.lesson, { organization: input.branding?.organizationName }));
       zip.file("index.html", playerHtml);

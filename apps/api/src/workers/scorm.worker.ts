@@ -164,6 +164,12 @@ export function startScormWorker() {
         branding: { organizationName: "Learning Platform" },
         quizSkinCss,
         version: "2004_4",
+        // Attempt reporting (LP-16): absolute when PUBLIC_BASE_URL is set (so
+        // LMS-hosted zips can reach us cross-origin), else relative — which
+        // works for preview links served from our own origin.
+        attemptsUrl: process.env.PUBLIC_BASE_URL
+          ? `${process.env.PUBLIC_BASE_URL.replace(/\/$/, "")}/api/xapi/attempts`
+          : "/api/xapi/attempts",
       });
 
       const zipKey = `lessons/${lessonId}/lesson.scorm.zip`;

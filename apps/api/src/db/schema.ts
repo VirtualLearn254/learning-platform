@@ -258,6 +258,35 @@ export const hermesRuns = pgTable("hermes_runs", {
   notes: text("notes").default("").notNull(),
 });
 
+/** One completed play-through of a lesson by a learner — the standalone
+ *  results store (LP-16). SCORM already reports to the host LMS; this table
+ *  is OUR record, fed by the player at completion, so results exist even
+ *  without an LMS (preview links, direct delivery) and power the Results
+ *  dashboard (teacher roster + item analysis). */
+export const attempts = pgTable("attempts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  lessonId: uuid("lesson_id").notNull().references(() => lessons.id, { onDelete: "cascade" }),
+  /** Stable learner identity: "scorm:<lms id>", "name:<?learner= param>", or "anon:<local id>". */
+  learnerId: text("learner_id").notNull(),
+  learnerName: text("learner_name"),
+  source: text("source").notNull(), // "scorm" | "standalone"
+  scorePct: integer("score_pct").notNull(),
+  correctCount: integer("correct_count").default(0).notNull(),
+  totalQuestions: integer("total_questions").default(0).notNull(),
+  points: integer("points").default(0).notNull(),
+  /** Per-question records, same shape the player reports to SCORM:
+   *  { id, type, result, description, learner, correct }[] */
+  interactions: jsonb("interactions").$type<Array<{
+    id: string; type: string; result: string;
+    description?: string; learner?: string; correct?: string;
+  }>>().default([]).notNull(),
+  durationSec: integer("duration_sec"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  lessonIdx: index("attempts_lesson_idx").on(t.lessonId, t.createdAt),
+  learnerIdx: index("attempts_learner_idx").on(t.learnerId),
+}));
+
 export const aiUsage = pgTable("ai_usage", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   ts: timestamp("ts", { withTimezone: true }).defaultNow().notNull(),
