@@ -68,11 +68,13 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
   // id arrives. Off course routes it hides as before.
   const inCourseContext = /^\/(beats|lessons|courses)\//.test(pathname);
   const [rememberedCourse, setRememberedCourse] = useState<string | undefined>(undefined);
+  const [resumePath, setResumePath] = useState<string | undefined>(undefined);
   useLayoutEffect(() => {
     try {
       setCollapsed(localStorage.getItem("lp_nav_collapsed") === "1");
       setCourseOpen(localStorage.getItem("lp_course_panel") !== "0");
       setRememberedCourse(sessionStorage.getItem("lp_last_course") ?? undefined);
+      setResumePath(sessionStorage.getItem("lp_course_resume") ?? undefined);
     } catch { /* private mode */ }
     requestAnimationFrame(() => setReady(true));
   }, []);
@@ -82,6 +84,15 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
       try { sessionStorage.setItem("lp_last_course", courseId); } catch { /* private mode */ }
     }
   }, [courseId]);
+  // Remember the exact course sub-page (beat/lesson/course) so leaving for
+  // Settings etc. and clicking "Courses" resumes WHERE YOU WERE. When already
+  // inside a course, "Courses" goes to the index instead.
+  useLayoutEffect(() => {
+    if (inCourseContext) {
+      setResumePath(pathname);
+      try { sessionStorage.setItem("lp_course_resume", pathname); } catch { /* private mode */ }
+    }
+  }, [pathname, inCourseContext]);
   const effectiveCourseId = courseId ?? (inCourseContext ? rememberedCourse : undefined);
   function toggleCollapsed() {
     setCollapsed((c) => {
@@ -122,10 +133,13 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
             const active = item.href === "/"
               ? pathname === "/"
               : pathname.startsWith(item.href);
+            // "Courses" resumes your last position inside a course when you're
+            // elsewhere; from within a course it goes to the index as usual.
+            const href = item.href === "/courses" && !inCourseContext && resumePath ? resumePath : item.href;
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={href}
                 title={collapsed ? item.label : undefined}
                 className={cn(
                   "flex items-center gap-3 rounded-lg text-sm transition-colors",
@@ -206,7 +220,19 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
   );
 }
 
-export function PageHeader({ title, description, actions, breadcrumbs }: { title: string; description?: string; actions?: ReactNode; breadcrumbs?: ReactNode }) {
+export function PageHeader({ title, description, actions, breadcrumbs, compact }: { title: string; description?: string; actions?: ReactNode; breadcrumbs?: ReactNode; compact?: boolean }) {
+  if (compact) {
+    // One slim row: title · inline description · actions — for board-style
+    // pages (Kanban) where vertical space belongs to the content.
+    return (
+      <div className="shrink-0 px-6 py-3 border-b border-[var(--color-border)] flex items-center gap-3">
+        {breadcrumbs}
+        <h1 className="text-lg font-semibold tracking-tight shrink-0" style={{ fontFamily: "var(--font-display)" }}>{title}</h1>
+        {description && <p className="text-xs text-[var(--color-muted)] truncate flex-1 min-w-0">{description}</p>}
+        {actions && <div className="flex gap-2 ml-auto shrink-0">{actions}</div>}
+      </div>
+    );
+  }
   return (
     <div className="shrink-0 px-12 py-6 border-b border-[var(--color-border)]">
       {breadcrumbs && <div className="mb-3">{breadcrumbs}</div>}
@@ -223,6 +249,6 @@ export function PageHeader({ title, description, actions, breadcrumbs }: { title
   );
 }
 
-export function PageBody({ children }: { children: ReactNode }) {
-  return <div className="flex-1 overflow-y-auto overflow-x-hidden p-12">{children}</div>;
+export function PageBody({ children, padding }: { children: ReactNode; padding?: string }) {
+  return <div className={`flex-1 overflow-y-auto overflow-x-hidden ${padding ?? "p-12"}`}>{children}</div>;
 }

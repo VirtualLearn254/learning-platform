@@ -43,6 +43,7 @@ export default function KanbanPage() {
   return (
     <AppShell>
       <PageHeader
+        compact
         title="Kanban"
         description="Every beat across every course — auto-refreshes. Approve or send back straight from the cards."
         actions={
@@ -54,7 +55,7 @@ export default function KanbanPage() {
           ) : undefined
         }
       />
-      <PageBody>
+      <PageBody padding="px-4 pt-3 pb-2">
         {error ? (
           <ErrorState error={error} onRetry={() => mutate()} />
         ) : isLoading || !data ? (

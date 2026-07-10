@@ -28,7 +28,7 @@ export function KanbanBoard({ beats, onAction }: { beats: Beat[]; onAction?: () 
     /* Fills the page height; the PAGE never grows with the tallest column —
        each column scrolls its own cards independently (up/down within the
        column), with only horizontal scrolling at the board level. */
-    <div className="h-full overflow-x-auto -mx-12 px-12">
+    <div className="h-full overflow-x-auto -mx-4 px-4">
       <div className="flex gap-4 min-w-max h-full pb-2">
         {COLUMNS.map((col) => (
           <div key={col.stage} className="w-72 shrink-0 flex flex-col h-full min-h-0">
