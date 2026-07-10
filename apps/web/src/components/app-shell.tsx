@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import useSWR from "swr";
 import {
   BookOpen, KanbanSquare, BarChart3, Settings, Sparkles, Home, Palette,
@@ -56,11 +56,17 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
   const [collapsed, setCollapsed] = useState(false);
   // The secondary course panel has its own collapse state + slider handle.
   const [courseOpen, setCourseOpen] = useState(true);
-  useEffect(() => {
+  // Width transitions are enabled only AFTER the persisted state is applied:
+  // the shell remounts on every page navigation, so restoring "collapsed"
+  // must happen before paint (useLayoutEffect) and without animating — else
+  // each view switch replays a 240px→64px slide. Manual toggles still animate.
+  const [ready, setReady] = useState(false);
+  useLayoutEffect(() => {
     try {
       setCollapsed(localStorage.getItem("lp_nav_collapsed") === "1");
       setCourseOpen(localStorage.getItem("lp_course_panel") !== "0");
     } catch { /* private mode */ }
+    requestAnimationFrame(() => setReady(true));
   }, []);
   function toggleCollapsed() {
     setCollapsed((c) => {
@@ -80,7 +86,8 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
       <CommandPalette />
       {/* ── Left nav: header pinned, link list scrolls, status pinned ── */}
       <aside className={cn(
-        "bg-white border-r border-[var(--color-border)] flex flex-col transition-[width] duration-200",
+        "bg-white border-r border-[var(--color-border)] flex flex-col",
+        ready && "transition-[width] duration-200",
         collapsed ? "w-16" : "w-60",
       )}>
         <div className={cn("shrink-0 border-b border-[var(--color-border)] flex items-center", collapsed ? "px-0 py-4 justify-center" : "px-6 py-6 justify-between")}>
