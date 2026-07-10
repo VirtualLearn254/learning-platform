@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,13 +19,21 @@ export default function SettingsPage() {
     <AppShell>
       <PageHeader title="Settings" description="AI providers, role routing, usage analytics, notifications." />
       <PageBody>
-        <div className="space-y-6 max-w-5xl">
-          <AIProvidersCard />
-          <AIRolesCard />
-          <AIUsageCard />
-          <NotificationsCard />
-          <BrandingCard />
-        </div>
+        {/* Same info as before, one section per compact tab (Hermes pattern). */}
+        <Tabs defaultValue="providers" className="max-w-5xl">
+          <TabsList>
+            <TabsTrigger value="providers">Providers</TabsTrigger>
+            <TabsTrigger value="roles">Roles</TabsTrigger>
+            <TabsTrigger value="usage">Usage</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            <TabsTrigger value="branding">Branding</TabsTrigger>
+          </TabsList>
+          <TabsContent value="providers"><AIProvidersCard /></TabsContent>
+          <TabsContent value="roles"><AIRolesCard /></TabsContent>
+          <TabsContent value="usage"><AIUsageCard /></TabsContent>
+          <TabsContent value="notifications"><NotificationsCard /></TabsContent>
+          <TabsContent value="branding"><BrandingCard /></TabsContent>
+        </Tabs>
       </PageBody>
     </AppShell>
   );
