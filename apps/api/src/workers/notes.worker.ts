@@ -136,20 +136,33 @@ export function startNotesWorker() {
       await note(`AI returned ${ai.text.length} chars (in=${ai.usage.inputTokens} out=${ai.usage.outputTokens}) · rendering PDF`);
 
       // Reasoning-style models (GLM) think out loud around — and between —
-      // drafts. Proven live: the first run shipped "Let me design…" prose
-      // into the PDF. Strip <think> blocks, then keep ONLY the last complete
-      // <!doctype…</html> document (the final draft); everything before or
-      // after it is commentary.
-      let html = ai.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      // drafts, and mention "<html>" in prose. Proven live twice: run 1
+      // shipped "Let me design…" text into the PDF; run 2's take-the-LAST-
+      // doctype heuristic latched onto a stray late mention and shipped a
+      // blank page. Keep the raw output for debugging and extract the
+      // LARGEST complete <!doctype…</html> block — the real document is
+      // always far bigger than any prose fragment.
+      const raw = ai.text;
+      await s3.putObject(`lessons/${lessonId}/notes.html`, Buffer.from(raw, "utf-8"), { contentType: "text/html; charset=utf-8" });
+      let html = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
       {
         const lower = html.toLowerCase();
-        const start = Math.max(lower.lastIndexOf("<!doctype"), lower.lastIndexOf("<html"));
-        const end = lower.lastIndexOf("</html>");
-        if (start >= 0 && end > start) html = html.slice(start, end + "</html>".length);
+        let best: string | null = null;
+        for (const m of lower.matchAll(/<!doctype|<html[\s>]/g)) {
+          const end = lower.indexOf("</html>", m.index!);
+          if (end > m.index!) {
+            const cand = html.slice(m.index!, end + "</html>".length);
+            if (!best || cand.length > best.length) best = cand;
+          }
+        }
+        if (best) html = best;
       }
       html = html.replace(/^```(?:html)?\s*/i, "").replace(/```\s*$/i, "").trim();
       if (!/<html[\s>]/i.test(html)) {
         html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${html}</body></html>`;
+      }
+      if (html.length < 5_000) {
+        return await fail(new Error(`Notes HTML implausibly small (${html.length} chars) — raw AI output kept at lessons/${lessonId}/notes.html for inspection; not shipping a blank PDF`));
       }
       // Self-containment guard: strip any external resource the model snuck in.
       html = html.replace(/<img[^>]+src=["']https?:[^>]*>/gi, "")
