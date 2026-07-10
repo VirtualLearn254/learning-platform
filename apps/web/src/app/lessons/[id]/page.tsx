@@ -9,9 +9,8 @@ import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { VideoPlayer } from "@/components/video-player";
-import { BeatCard } from "@/components/beat-card";
+import { BeatRow } from "@/components/beat-row";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ReviewIssues } from "@/components/review-issues";
 import { ErrorState } from "@/components/error-state";
 import { useToast } from "@/lib/use-toast";
@@ -156,7 +155,6 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       <PageHeader
         title={lesson.title}
         description={lesson.summary ?? undefined}
-        breadcrumbs={data.breadcrumbs && <Breadcrumbs items={data.breadcrumbs} />}
         actions={
           <div className="flex gap-2 flex-wrap">
             {ingestedCount > 0 && (
@@ -283,17 +281,17 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
           )}
 
           <Card className="p-6">
-            <h3 className="font-semibold mb-4">Beats ({mainBeats.length})</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {mainBeats.map((b) => <BeatCard key={b.id} beat={b} />)}
+            <h3 className="font-semibold mb-3">Beats ({mainBeats.length})</h3>
+            <div className="-mx-1">
+              {mainBeats.map((b) => <BeatRow key={b.id} beat={b} onAction={() => mutate()} />)}
             </div>
           </Card>
 
           {altBeats.length > 0 && (
             <Card className="p-6">
-              <h3 className="font-semibold mb-4">Alt beats — scenario branches ({altBeats.length})</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {altBeats.map((b) => <BeatCard key={b.id} beat={b} />)}
+              <h3 className="font-semibold mb-3">Alt beats — scenario branches ({altBeats.length})</h3>
+              <div className="-mx-1">
+                {altBeats.map((b) => <BeatRow key={b.id} beat={b} />)}
               </div>
             </Card>
           )}

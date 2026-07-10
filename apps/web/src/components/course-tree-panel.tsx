@@ -40,13 +40,13 @@ export function CourseTreePanel({ courseId }: { courseId: string }) {
   };
 
   return (
-    <div className="shrink-0 max-h-[45%] flex flex-col border-t border-[var(--color-border)]">
+    <div className="flex-1 min-h-0 flex flex-col">
       <Link
         href={`/courses/${courseId}`}
-        className="shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+        className="shrink-0 flex items-center gap-2 px-4 py-4 border-b border-[var(--color-border)] hover:bg-[var(--color-bg)]"
       >
-        <BookOpen className="w-3.5 h-3.5" />
-        <span className="truncate normal-case tracking-normal text-[13px] font-semibold text-[var(--color-ink)]">{tree.title}</span>
+        <BookOpen className="w-4 h-4 shrink-0 text-[var(--color-muted)]" />
+        <span className="truncate text-sm font-semibold">{tree.title}</span>
       </Link>
       <div className="flex-1 overflow-y-auto px-2 pb-3 text-[13px]">
         {tree.sections.map((s) => {

@@ -24,13 +24,20 @@ export default function Dashboard() {
   const { data: coursesData, error: coursesError, mutate: retryCourses } = useSWR("courses", () => api.listCourses());
   const { data: beatsData } = useSWR("beats", () => api.listBeats(), { refreshInterval: 5000 });
   const { data: jobsData, mutate: refreshJobs } = useSWR("dash-jobs", () => api.listJobs(), { refreshInterval: 5000 });
+  const { data: rulesData } = useSWR("dash-rules", () =>
+    fetch("/api/rules").then((r) => (r.ok ? r.json() : { rules: [] })) as Promise<{ rules: Array<{ id: string; scope: string; rule: string; origin: string; active: boolean }> }>,
+    { refreshInterval: 30000 });
+  const { data: attemptsData } = useSWR("dash-attempts", () => api.attemptLessons(), { refreshInterval: 30000 });
   useLiveJobs(() => refreshJobs());
 
   const courses = coursesData?.courses ?? [];
   const beats = beatsData?.beats ?? [];
   const jobs = jobsData?.jobs ?? [];
 
-  const needsReviewCount = beats.filter((b) => b.stage === "human_review").length;
+  const reviewBeats = beats.filter((b) => b.stage === "human_review");
+  const needsReviewCount = reviewBeats.length;
+  const hermesPending = (rulesData?.rules ?? []).filter((r) => !r.active && r.origin.startsWith("hermes"));
+  const attemptLessons = attemptsData?.lessons ?? [];
   const inFlightCount = beats.filter((b) => ["authoring", "ai_review", "rendering", "revising", "stitched"].includes(b.stage)).length;
   const publishedCount = beats.filter((b) => b.stage === "published").length;
 
@@ -107,6 +114,82 @@ export default function Dashboard() {
           <Kpi label="Needs your review" value={needsReviewCount} icon={KanbanSquare} href="/kanban" highlight={needsReviewCount > 0} />
           <Kpi label="In flight" value={inFlightCount} icon={Activity} href="/activity" />
           <Kpi label="Published" value={publishedCount} icon={Sparkles} href="/kanban" />
+        </div>
+
+        {/* Needs you: recommendations, reviews, and fresh learner results */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <Card>
+            <CardHeader className="pb-2 flex-row items-center justify-between">
+              <CardTitle className="text-sm">Hermes recommendations</CardTitle>
+              <Link href="/hermes" className="text-xs text-[var(--color-accent)] hover:underline">open →</Link>
+            </CardHeader>
+            <CardContent>
+              {hermesPending.length === 0 ? (
+                <p className="text-sm text-[var(--color-muted)]">Nothing pending.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {hermesPending.slice(0, 3).map((r) => (
+                    <li key={r.id} className="text-sm">
+                      <span className="font-mono text-[10px] uppercase text-[var(--color-muted)] mr-1.5">{r.scope}</span>
+                      <span className="line-clamp-2">{r.rule}</span>
+                    </li>
+                  ))}
+                  {hermesPending.length > 3 && (
+                    <li className="text-xs text-[var(--color-muted)]">+{hermesPending.length - 3} more</li>
+                  )}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className={needsReviewCount > 0 ? "border-amber-300" : undefined}>
+            <CardHeader className="pb-2 flex-row items-center justify-between">
+              <CardTitle className="text-sm">Awaiting your review</CardTitle>
+              <Link href="/kanban" className="text-xs text-[var(--color-accent)] hover:underline">kanban →</Link>
+            </CardHeader>
+            <CardContent>
+              {reviewBeats.length === 0 ? (
+                <p className="text-sm text-[var(--color-muted)]">All clear.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {reviewBeats.slice(0, 4).map((b) => (
+                    <li key={b.id}>
+                      <Link href={`/beats/${b.id}`} className="text-sm font-mono text-[var(--color-ink)] hover:text-[var(--color-accent)] block truncate">
+                        {b.beatKey}
+                        {b.reviewScore != null && <span className="ml-2 text-xs text-[var(--color-muted)]">{b.reviewScore}/100</span>}
+                      </Link>
+                    </li>
+                  ))}
+                  {reviewBeats.length > 4 && (
+                    <li className="text-xs text-[var(--color-muted)]">+{reviewBeats.length - 4} more</li>
+                  )}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2 flex-row items-center justify-between">
+              <CardTitle className="text-sm">Latest results</CardTitle>
+              <Link href="/results" className="text-xs text-[var(--color-accent)] hover:underline">open →</Link>
+            </CardHeader>
+            <CardContent>
+              {attemptLessons.length === 0 ? (
+                <p className="text-sm text-[var(--color-muted)]">No learner attempts yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {attemptLessons.slice(0, 3).map((l) => (
+                    <li key={l.lessonId} className="text-sm flex items-center justify-between gap-2">
+                      <span className="truncate">{l.lessonTitle}</span>
+                      <span className="text-xs text-[var(--color-muted)] tabular-nums shrink-0">
+                        {l.attempts}× · avg {l.avgScore}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Recent courses */}

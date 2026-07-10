@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { CourseTree } from "@/components/course-tree";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ErrorState } from "@/components/error-state";
 import { useToast } from "@/lib/use-toast";
 
@@ -128,7 +127,9 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
         const rendered = main.filter((b) => !!b.mp4Key).length;
         const done = main.filter((b) => b.stage === "stitched" || b.stage === "published").length;
         const failed = main.filter((b) => b.status === "failed").length;
-        return { id: l.id, title: l.title, total: main.length, rendered, done, failed };
+        const needsReview = main.filter((b) => b.stage === "human_review").length;
+        const inFlight = main.filter((b) => ["authoring", "ai_review", "rendering", "revising"].includes(b.stage)).length;
+        return { id: l.id, title: l.title, total: main.length, rendered, done, failed, needsReview, inFlight, published: !!l.publishedAt };
       }),
     ),
   );
@@ -139,10 +140,6 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
       <PageHeader
         title={tree.title}
         description={tree.summary ?? undefined}
-        breadcrumbs={<Breadcrumbs items={[
-          { kind: "courses-root", id: null, title: "Courses" },
-          { kind: "course", id: tree.id, title: tree.title },
-        ]} />}
         actions={
           anyBeats ? (
             autopilot ? (
@@ -183,11 +180,22 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
                   {l.rendered}/{l.total}
                 </span>
                 {l.failed > 0 && (
-                  <span className="text-xs text-[var(--color-accent-2)] shrink-0">{l.failed} failed</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-[var(--color-accent-2)] shrink-0">{l.failed} failed</span>
                 )}
-                {l.done === l.total && l.total > 0 && (
+                {l.needsReview > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 shrink-0">{l.needsReview} to review</span>
+                )}
+                {l.inFlight > 0 && (
+                  <span className="text-xs text-[var(--color-muted)] shrink-0">{l.inFlight} in flight</span>
+                )}
+                {l.failed === 0 && l.needsReview === 0 && l.inFlight === 0 && l.rendered < l.total && l.total > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 shrink-0">stalled</span>
+                )}
+                {l.published ? (
+                  <span className="text-xs text-[var(--color-accent)] shrink-0">✓ published</span>
+                ) : l.done === l.total && l.total > 0 ? (
                   <span className="text-xs text-[var(--color-accent)] shrink-0">✓</span>
-                )}
+                ) : null}
               </div>
             ))}
           </Card>

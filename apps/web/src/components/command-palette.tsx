@@ -21,6 +21,8 @@ const PAGES: PaletteItem[] = [
   { id: "p-activity",  kind: "page", title: "Activity",   href: "/activity" },
   { id: "p-kanban",    kind: "page", title: "Kanban",     href: "/kanban" },
   { id: "p-analytics", kind: "page", title: "Analytics",  href: "/analytics" },
+  { id: "p-results",   kind: "page", title: "Results",    href: "/results" },
+  { id: "p-hermes",    kind: "page", title: "Hermes",     href: "/hermes" },
   { id: "p-styles",    kind: "page", title: "Styles",     href: "/styles" },
   { id: "p-docs",      kind: "page", title: "Docs",       href: "/docs" },
   { id: "p-settings",  kind: "page", title: "Settings — AI providers & roles", href: "/settings" },
@@ -48,6 +50,7 @@ export function CommandPalette() {
 
   // Lazy data: only fetch once the palette has been opened.
   const { data: coursesData } = useSWR(open ? "cp-courses" : null, () => api.listCourses());
+  const { data: lessonsData } = useSWR(open ? "cp-lessons" : null, () => api.listLessons());
   const { data: beatsData } = useSWR(open ? "cp-beats" : null, () => api.listBeats());
 
   useEffect(() => {
@@ -74,12 +77,16 @@ export function CommandPalette() {
     const courses: PaletteItem[] = (coursesData?.courses ?? []).map((c) => ({
       id: c.id, kind: "course", title: c.title, subtitle: "course", href: `/courses/${c.id}`,
     }));
+    const lessons: PaletteItem[] = (lessonsData?.lessons ?? []).map((l) => ({
+      id: l.id, kind: "lesson", title: l.title,
+      subtitle: l.publishedAt ? "lesson · published" : "lesson", href: `/lessons/${l.id}`,
+    }));
     const beats: PaletteItem[] = (beatsData?.beats ?? []).map((b) => ({
       id: b.id, kind: "beat", title: b.beatKey,
       subtitle: b.script.slice(0, 70), href: `/beats/${b.id}`,
     }));
-    return [...PAGES, ...courses, ...beats];
-  }, [coursesData, beatsData]);
+    return [...PAGES, ...courses, ...lessons, ...beats];
+  }, [coursesData, lessonsData, beatsData]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();

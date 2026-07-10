@@ -32,6 +32,15 @@ async function latestJobForLesson(lessonId: string, queue: string): Promise<Less
 }
 
 export const lessonsRoute = new Hono()
+  .get("/", async (c) => {
+    /** Lightweight lesson index — powers the command palette. */
+    const rows = await db.select({
+      id: tables.lessons.id,
+      title: tables.lessons.title,
+      publishedAt: tables.lessons.publishedAt,
+    }).from(tables.lessons).orderBy(asc(tables.lessons.title)).limit(500);
+    return c.json({ lessons: rows });
+  })
   .get("/:id", async (c) => {
     const id = c.req.param("id");
     const lesson = await db.query.lessons.findFirst({ where: eq(tables.lessons.id, id) });

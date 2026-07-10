@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import {
   BookOpen, KanbanSquare, BarChart3, Settings, Sparkles, Home, Palette,
   FileText, Activity, ClipboardCheck, PanelLeftClose, PanelLeftOpen,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
@@ -31,18 +33,45 @@ const NAV: NavItem[] = [
   { href: "/settings",   label: "Settings",   icon: Settings },
 ];
 
+/** Live counts for the nav badges — running jobs (Activity) and pending
+ *  Hermes proposals. Light polling; SWR dedupes across pages. */
+function useNavBadges(): Record<string, number> {
+  const { data: jobsData } = useSWR("nav-jobs", () =>
+    fetch("/api/jobs?status=running").then((r) => (r.ok ? r.json() : { jobs: [] })) as Promise<{ jobs: unknown[] }>,
+    { refreshInterval: 12000 });
+  const { data: rulesData } = useSWR("nav-rules", () =>
+    fetch("/api/rules").then((r) => (r.ok ? r.json() : { rules: [] })) as Promise<{ rules: Array<{ active: boolean; origin: string }> }>,
+    { refreshInterval: 30000 });
+  return {
+    "/activity": jobsData?.jobs?.length ?? 0,
+    "/hermes": (rulesData?.rules ?? []).filter((r) => !r.active && r.origin.startsWith("hermes")).length,
+  };
+}
+
 export function AppShell({ children, courseId }: { children: ReactNode; courseId?: string }) {
   const pathname = usePathname();
+  const badges = useNavBadges();
   // Collapsed = icon-only rail. Persisted; read after mount to avoid a
   // server/client hydration mismatch (SSR can't see localStorage).
   const [collapsed, setCollapsed] = useState(false);
+  // The secondary course panel has its own collapse state + slider handle.
+  const [courseOpen, setCourseOpen] = useState(true);
   useEffect(() => {
-    try { setCollapsed(localStorage.getItem("lp_nav_collapsed") === "1"); } catch { /* private mode */ }
+    try {
+      setCollapsed(localStorage.getItem("lp_nav_collapsed") === "1");
+      setCourseOpen(localStorage.getItem("lp_course_panel") !== "0");
+    } catch { /* private mode */ }
   }, []);
   function toggleCollapsed() {
     setCollapsed((c) => {
       try { localStorage.setItem("lp_nav_collapsed", c ? "0" : "1"); } catch { /* private mode */ }
       return !c;
+    });
+  }
+  function toggleCourseOpen() {
+    setCourseOpen((o) => {
+      try { localStorage.setItem("lp_course_panel", o ? "0" : "1"); } catch { /* private mode */ }
+      return !o;
     });
   }
 
@@ -84,14 +113,25 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
                     : "text-[var(--color-ink)] hover:bg-[var(--color-bg)]",
                 )}
               >
-                <item.icon className="w-4 h-4 shrink-0" />
-                {!collapsed && item.label}
+                <span className="relative shrink-0">
+                  <item.icon className="w-4 h-4" />
+                  {collapsed && (badges[item.href] ?? 0) > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[var(--color-accent)]" />
+                  )}
+                </span>
+                {!collapsed && <span className="flex-1">{item.label}</span>}
+                {!collapsed && (badges[item.href] ?? 0) > 0 && (
+                  <span className={cn(
+                    "text-[10px] tabular-nums rounded-full px-1.5 py-0.5 min-w-[18px] text-center",
+                    active ? "bg-white/20 text-white" : "bg-[var(--color-accent)] text-white",
+                  )}>
+                    {badges[item.href]}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
-        {/* Course tree for the course you're inside (hidden on the icon rail). */}
-        {courseId && !collapsed && <CourseTreePanel courseId={courseId} />}
         <div className={cn("shrink-0 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)] flex items-center", collapsed ? "p-2 justify-center" : "p-3 justify-between")}>
           {!collapsed && (
             <span className="inline-flex items-center gap-1">
@@ -109,6 +149,33 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
           </button>
         </div>
       </aside>
+
+      {/* ── Secondary panel: the CURRENT course's structure, beside the main
+             nav, with its own slider handle. Replaces the breadcrumb trail. ── */}
+      {courseId && (
+        courseOpen ? (
+          <aside className="w-64 bg-white border-r border-[var(--color-border)] flex flex-col relative">
+            <CourseTreePanel courseId={courseId} />
+            <button
+              onClick={toggleCourseOpen}
+              title="Collapse course panel"
+              className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 w-6 h-12 rounded-full bg-white border border-[var(--color-border)] shadow-sm flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          </aside>
+        ) : (
+          <button
+            onClick={toggleCourseOpen}
+            title="Open course panel"
+            className="w-6 shrink-0 bg-white border-r border-[var(--color-border)] flex flex-col items-center justify-center gap-2 text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-bg)]"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="text-[10px] tracking-widest uppercase" style={{ writingMode: "vertical-rl" }}>Course</span>
+          </button>
+        )
+      )}
+
       {/* ── Main column: column-flex so PageHeader stays + PageBody scrolls ── */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {children}

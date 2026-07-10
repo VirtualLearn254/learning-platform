@@ -93,6 +93,10 @@ export const api = {
   listBeatJobs: (beatId: string) =>
     fetchJson<{ jobs: Array<{ id: string; queue: string; status: string; attempts: number; startedAt: string | null; endedAt: string | null; etaSeconds: number | null; errorMessage: string | null; createdAt: string }> }>(`/jobs?beatId=${beatId}`),
 
+  /** Lightweight lesson index — command palette + pickers. */
+  listLessons: () =>
+    fetchJson<{ lessons: Array<{ id: string; title: string; publishedAt: string | null }> }>("/lessons"),
+
   // Attempts (LP-16 results store)
   attemptLessons: () =>
     fetchJson<{ lessons: Array<{ lessonId: string; lessonTitle: string; attempts: number; learners: number; avgScore: number; lastAttemptAt: string }> }>("/attempts/lessons"),

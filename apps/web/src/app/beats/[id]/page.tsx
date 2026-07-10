@@ -17,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BeatEditor } from "@/components/beat-editor";
 import { JobTimeline } from "@/components/job-timeline";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ReviewIssues } from "@/components/review-issues";
 import { ErrorState } from "@/components/error-state";
 import { useToast } from "@/lib/use-toast";
@@ -190,7 +189,6 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
       <PageHeader
         title={beat.beatKey}
         description={`${beat.beatType} · revision ${beat.revisionCount} · stage:`}
-        breadcrumbs={data.breadcrumbs && <Breadcrumbs items={data.breadcrumbs} />}
         actions={
           <div className="flex items-center gap-2">
             <StageBadge stage={beat.stage} />
