@@ -24,6 +24,7 @@ export const QueueNames = {
   Stitch:     "stitch",      // lesson-level: stitch all beats into master
   Audit:      "audit",       // post-stitch audit-toolkit pass
   ScormBuild: "scorm_build", // package master + assets → SCORM zip
+  Notes:      "lesson_notes", // designer-AI lesson-notes PDF from source material (LP-19)
 } as const;
 
 export type QueueName = (typeof QueueNames)[keyof typeof QueueNames];
@@ -46,6 +47,7 @@ export const queues = {
   stitch: makeQueue<{ lessonId: string }>(QueueNames.Stitch),
   audit: makeQueue<{ lessonId: string }>(QueueNames.Audit),
   scormBuild: makeQueue<{ lessonId: string }>(QueueNames.ScormBuild),
+  notes: makeQueue<{ lessonId: string }>(QueueNames.Notes),
 } as const;
 
 export type Queues = typeof queues;

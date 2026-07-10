@@ -19,11 +19,14 @@ import { db, tables } from "../db/index.js";
 function base(): string {
   return (process.env.PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
 }
-function lessonUrls(lessonId: string) {
+function lessonUrls(lessonId: string, notesPdfKey?: string | null) {
   return {
     scormUrl: `${base()}/api/files/${encodeURIComponent(`lessons/${lessonId}/lesson.scorm.zip`)}`,
     playUrl: `${base()}/api/files/lessons/${lessonId}/preview/index.html`,
     ltiLaunchUrl: `${base()}/api/lti/launch?lesson=${lessonId}`,
+    /** Lesson notes (LP-19) — also inside the zip as notes.pdf; this URL lets
+     *  an LMS attach it as a separate File resource. */
+    notesUrl: notesPdfKey ? `${base()}/api/files/${encodeURIComponent(notesPdfKey)}` : null,
   };
 }
 
@@ -32,6 +35,7 @@ export const publishRoute = new Hono()
     const lessons = await db.select({
       id: tables.lessons.id, title: tables.lessons.title, summary: tables.lessons.summary,
       publishedAt: tables.lessons.publishedAt, moduleId: tables.lessons.moduleId,
+      notesPdfKey: tables.lessons.notesPdfKey,
     }).from(tables.lessons).where(isNotNull(tables.lessons.publishedAt));
     if (lessons.length === 0) return c.json({ courses: [] });
 
@@ -58,7 +62,7 @@ export const publishRoute = new Hono()
           lessons: ls.map((l) => ({
             id: l.id, title: l.title, summary: l.summary,
             publishedAt: l.publishedAt?.toISOString() ?? null,
-            ...lessonUrls(l.id),
+            ...lessonUrls(l.id, l.notesPdfKey),
           })),
         };
       }),
@@ -72,7 +76,7 @@ export const publishRoute = new Hono()
       lesson: {
         id: lesson.id, title: lesson.title, summary: lesson.summary,
         publishedAt: lesson.publishedAt.toISOString(),
-        ...lessonUrls(lesson.id),
+        ...lessonUrls(lesson.id, lesson.notesPdfKey),
       },
     });
   });

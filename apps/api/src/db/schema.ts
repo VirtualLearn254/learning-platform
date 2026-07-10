@@ -73,6 +73,11 @@ export const lessons = pgTable("lessons", {
   masterMp4Key: text("master_mp4_key"),
   /** S3 key for the SCORM zip once published. */
   scormPackageKey: text("scorm_package_key"),
+  /** LP-19 lesson notes: designer-AI PDF drafted from the SOURCE material
+   *  (not the narration) — the all-encompassing reference that ships inside
+   *  the SCORM zip as lesson notes. */
+  notesPdfKey: text("notes_pdf_key"),
+  notesGeneratedAt: timestamp("notes_generated_at", { withTimezone: true }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   /** Latest holistic-review score (0-100) for the lesson as a whole. */
   holisticScore: integer("holistic_score"),

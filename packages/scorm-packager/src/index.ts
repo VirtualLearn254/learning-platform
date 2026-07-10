@@ -2702,6 +2702,9 @@ export interface ScormBuildInput {
   /** Branch remediation clips packaged next to master.mp4, referenced by
    *  cue.branch.file (e.g. "alt/<beatKey>.mp4"). */
   altClips?: Array<{ path: string; data: Buffer }>;
+  /** Lesson-notes PDF (LP-19) — shipped as notes.pdf inside the package so
+   *  the LMS delivers it as lesson notes alongside the video. */
+  notesPdf?: Buffer;
   /** SCORM version target. 2004 4th Ed is the default and recommended. */
   version?: "2004_4";
   /** Where the player POSTs the completed attempt (our standalone results
@@ -2735,12 +2738,16 @@ export function createScormPackager(): ScormPackager {
       const zip = new JSZip();
       zip.file("imsmanifest.xml", buildManifest(input.lesson, {
         organization: input.branding?.organizationName,
-        extraFiles: (input.altClips ?? []).map((a) => a.path),
+        extraFiles: [
+          ...(input.altClips ?? []).map((a) => a.path),
+          ...(input.notesPdf ? ["notes.pdf"] : []),
+        ],
       }));
       zip.file("index.html", playerHtml);
       zip.file("scorm-api.js", SCORM_API_JS);
       zip.file("master.mp4", input.masterMp4);
       for (const alt of input.altClips ?? []) zip.file(alt.path, alt.data);
+      if (input.notesPdf) zip.file("notes.pdf", input.notesPdf);
 
       const bytes = await zip.generateAsync({
         type: "nodebuffer",

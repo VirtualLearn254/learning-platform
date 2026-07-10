@@ -203,4 +203,12 @@ export const lessonsRoute = new Hono()
     const id = c.req.param("id");
     const job = await queues.scormBuild.add("manual-publish", { lessonId: id });
     return c.json({ ok: true, jobId: job.id });
+  })
+  .post("/:id/notes", async (c) => {
+    /** LP-19: (re)generate the lesson-notes PDF from the source material. */
+    const id = c.req.param("id");
+    const lesson = await db.query.lessons.findFirst({ where: eq(tables.lessons.id, id) });
+    if (!lesson) return c.json({ error: "not_found" }, 404);
+    const job = await queues.notes.add("regenerate-notes", { lessonId: id });
+    return c.json({ ok: true, jobId: job.id });
   });

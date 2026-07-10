@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import useSWR from "swr";
-import { Play, Download, Wand2, Film, Glasses, GitBranch } from "lucide-react";
+import { Play, Download, Wand2, Film, Glasses, GitBranch, FileText } from "lucide-react";
 
 import { api, type LessonJobSummary } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
@@ -96,6 +96,17 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       const r = await api.stitchLesson(id);
       if (!r.ok) throw new Error("failed to enqueue stitch");
       notify({ title: "Stitch queued — concatenating beats into master mp4", variant: "success" });
+      mutate();
+    } catch (e) {
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    }
+  }
+
+  async function regenerateNotes() {
+    try {
+      const r = await api.generateNotes(id);
+      if (!r.ok) throw new Error("failed");
+      notify({ title: "Lesson notes queued — designer AI drafts from the source material (~1 min)", variant: "success" });
       mutate();
     } catch (e) {
       notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
@@ -308,7 +319,14 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
                   {lesson.publishedAt && (<>
                     <a href={`/api/files/lessons/${lesson.id}/preview/index.html`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Play className="w-3.5 h-3.5" /> Interactive preview</a>
                     <a href={`/api/files/${encodeURIComponent(`lessons/${lesson.id}/content.pdf`)}`} download className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Download className="w-3.5 h-3.5" /> Companion PDF</a>
-                    <a href={`/api/files/${encodeURIComponent(`lessons/${lesson.id}/summary.pdf`)}`} download className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Download className="w-3.5 h-3.5" /> Answer key PDF</a>
+                    {lesson.notesPdfKey ? (
+                      <a href={`/api/files/${encodeURIComponent(lesson.notesPdfKey)}`} download className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Download className="w-3.5 h-3.5" /> Lesson notes PDF</a>
+                    ) : (
+                      <a href={`/api/files/${encodeURIComponent(`lessons/${lesson.id}/summary.pdf`)}`} download className="inline-flex items-center gap-1.5 text-sm text-[var(--color-accent)] hover:underline"><Download className="w-3.5 h-3.5" /> Answer key PDF</a>
+                    )}
+                    <button onClick={regenerateNotes} className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:underline" title="Designer AI drafts rich lesson notes from the source material (~1 min)">
+                      <FileText className="w-3.5 h-3.5" /> {lesson.notesPdfKey ? "Regenerate notes" : "Generate notes"}
+                    </button>
                   </>)}
                   {scormUrl && (
                     <a

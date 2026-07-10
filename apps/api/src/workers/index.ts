@@ -26,6 +26,7 @@ import { startRenderWorker } from "./render.worker.js";
 import { startStitchWorker } from "./stitch.worker.js";
 import { startAuditWorker } from "./audit.worker.js";
 import { startScormWorker } from "./scorm.worker.js";
+import { startNotesWorker } from "./notes.worker.js";
 
 const workers = [
   startIngestWorker(),
@@ -36,6 +37,7 @@ const workers = [
   startStitchWorker(),
   startAuditWorker(),
   startScormWorker(),
+  startNotesWorker(),
 ];
 
 console.log(`[workers] started ${workers.length} workers`);

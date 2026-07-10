@@ -64,6 +64,9 @@ export interface Lesson {
   styleHints: string[] | null;
   masterMp4Key: string | null;
   scormPackageKey: string | null;
+  /** LP-19 lesson notes PDF (drafted from source material, ships in the zip). */
+  notesPdfKey: string | null;
+  notesGeneratedAt: string | null;
   publishedAt: string | null;
   holisticScore: number | null;
   holisticIssues: ReviewIssue[] | null;

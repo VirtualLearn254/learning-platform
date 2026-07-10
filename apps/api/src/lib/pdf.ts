@@ -106,7 +106,7 @@ function summaryHtml(input: PdfLessonInput): string {
   </div></body></html>`;
 }
 
-async function htmlToPdf(html: string): Promise<Buffer> {
+export async function htmlToPdf(html: string): Promise<Buffer> {
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {

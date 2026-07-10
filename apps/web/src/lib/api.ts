@@ -56,6 +56,8 @@ export const api = {
   publishLesson: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/publish`, { method: "POST" }),
   generateBranches: (id: string) =>
     fetchJson<{ ok: boolean; created: number; beats: Array<{ beatKey: string; forQuiz: string }> }>(`/lessons/${id}/branches`, { method: "POST" }),
+  generateNotes: (id: string) =>
+    fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/notes`, { method: "POST" }),
 
   // Beats
   listBeats: (params?: { stage?: BeatStage[]; lessonId?: string }) => {

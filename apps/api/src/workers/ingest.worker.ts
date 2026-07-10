@@ -13,8 +13,9 @@ import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { z } from "zod";
 
 import { db, tables } from "../db/index.js";
-import { QueueNames } from "../queue/index.js";
+import { QueueNames, queues } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
+import { queueMissingNotesForCourse } from "./notes.worker.js";
 import { s3 } from "../lib/s3.js";
 import { getAIClient } from "../lib/ai_client.js";
 import { getRulesBlock } from "../lib/rules.js";
@@ -234,6 +235,16 @@ export function startIngestWorker() {
       });
 
       await db.update(tables.materials).set({ ingestedAt: new Date() }).where(eq(tables.materials.id, materialId));
+
+      // LP-19: draft lesson notes for every new lesson — a lesson-level
+      // artifact from the SOURCE material, so it runs right after ingest,
+      // in parallel with beat authoring. Best-effort.
+      try {
+        const queued = await queueMissingNotesForCourse(courseId, queues.notes);
+        if (queued) console.log(`[ingest] queued lesson notes for ${queued} lesson(s)`);
+      } catch (notesErr) {
+        console.warn(`[ingest] notes queueing failed (ingest unaffected):`, notesErr instanceof Error ? notesErr.message : notesErr);
+      }
 
       await db.update(tables.jobs).set({
         status: "succeeded",
