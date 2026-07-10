@@ -160,7 +160,7 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
   const { id } = use(params);
   const router = useRouter();
   const { notify } = useToast();
-  const { data, error, mutate, isLoading } = useSWR(`beat-${id}`, () => api.getBeat(id), { refreshInterval: 4000 });
+  const { data, error, mutate, isLoading } = useSWR(`beat-${id}`, () => api.getBeat(id), { refreshInterval: 4000, keepPreviousData: true });
   const lessonId = data?.beat?.lessonId;
   const { data: siblingsData } = useSWR(lessonId ? `beat-siblings-${lessonId}` : null, () => api.listBeats({ lessonId: lessonId! }));
 
@@ -188,7 +188,7 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
       </AppShell>
     );
   }
-  if (isLoading || !data) {
+  if (!data) {
     return (
       <AppShell>
         <PageHeader title="Loading…" />

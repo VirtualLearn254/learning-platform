@@ -47,7 +47,7 @@ function JobPill({ label, job }: { label: string; job: LessonJobSummary | null }
 
 export default function LessonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, mutate, isLoading } = useSWR(`lesson-${id}`, () => api.getLesson(id), { refreshInterval: 5000 });
+  const { data, error, mutate, isLoading } = useSWR(`lesson-${id}`, () => api.getLesson(id), { refreshInterval: 5000, keepPreviousData: true });
   const cid = data?.breadcrumbs?.find((c) => c.kind === "course")?.id;
   const { data: treeData } = useSWR(cid ? `course-tree-${cid}` : null, () => api.getCourseTree(cid!));
   const [beatView, setBeatView] = useViewMode("lp_view_lesson_beats");
@@ -126,7 +126,7 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       </AppShell>
     );
   }
-  if (isLoading || !data) {
+  if (!data) {
     return (
       <AppShell>
         <PageHeader title="Loading…" />

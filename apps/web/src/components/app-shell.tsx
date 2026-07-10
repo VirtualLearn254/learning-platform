@@ -61,13 +61,28 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
   // must happen before paint (useLayoutEffect) and without animating — else
   // each view switch replays a 240px→64px slide. Manual toggles still animate.
   const [ready, setReady] = useState(false);
+  // Course routes render a loading shell BEFORE they know their courseId —
+  // without a memory the panel would unmount/remount (a visible blink) on
+  // every beat/lesson click. Remember the last course and keep the panel up
+  // while we're on any course-scoped route; it swaps content when the real
+  // id arrives. Off course routes it hides as before.
+  const inCourseContext = /^\/(beats|lessons|courses)\//.test(pathname);
+  const [rememberedCourse, setRememberedCourse] = useState<string | undefined>(undefined);
   useLayoutEffect(() => {
     try {
       setCollapsed(localStorage.getItem("lp_nav_collapsed") === "1");
       setCourseOpen(localStorage.getItem("lp_course_panel") !== "0");
+      setRememberedCourse(sessionStorage.getItem("lp_last_course") ?? undefined);
     } catch { /* private mode */ }
     requestAnimationFrame(() => setReady(true));
   }, []);
+  useLayoutEffect(() => {
+    if (courseId) {
+      setRememberedCourse(courseId);
+      try { sessionStorage.setItem("lp_last_course", courseId); } catch { /* private mode */ }
+    }
+  }, [courseId]);
+  const effectiveCourseId = courseId ?? (inCourseContext ? rememberedCourse : undefined);
   function toggleCollapsed() {
     setCollapsed((c) => {
       try { localStorage.setItem("lp_nav_collapsed", c ? "0" : "1"); } catch { /* private mode */ }
@@ -159,10 +174,10 @@ export function AppShell({ children, courseId }: { children: ReactNode; courseId
 
       {/* ── Secondary panel: the CURRENT course's structure, beside the main
              nav, with its own slider handle. Replaces the breadcrumb trail. ── */}
-      {courseId && (
+      {effectiveCourseId && (
         courseOpen ? (
           <aside className="w-64 bg-white border-r border-[var(--color-border)] flex flex-col relative">
-            <CourseTreePanel courseId={courseId} />
+            <CourseTreePanel courseId={effectiveCourseId} />
             <button
               onClick={toggleCourseOpen}
               title="Collapse course panel"
