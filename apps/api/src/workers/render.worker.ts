@@ -328,7 +328,9 @@ export function startRenderWorker() {
       // triggers the stitch exactly once.
       const siblings = await db.select().from(tables.beats).where(eq(tables.beats.lessonId, beat.lessonId));
       const allReady = siblings.every((b) => b.isAlt || !!b.mp4Key);
-      if (allReady) {
+      // An alt (branch) beat finishing must not re-stitch — it isn't in the
+      // master. Its delivery path is the SCORM repackage (LP-18).
+      if (allReady && !beat.isAlt) {
         await queues.stitch.add("stitch-lesson", { lessonId: beat.lessonId });
       }
 

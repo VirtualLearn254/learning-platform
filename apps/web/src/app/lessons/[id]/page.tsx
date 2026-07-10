@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import useSWR from "swr";
-import { Play, Download, Wand2, Film, Glasses } from "lucide-react";
+import { Play, Download, Wand2, Film, Glasses, GitBranch } from "lucide-react";
 
 import { api, type LessonJobSummary } from "@/lib/api";
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
@@ -96,6 +96,22 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
       const r = await api.stitchLesson(id);
       if (!r.ok) throw new Error("failed to enqueue stitch");
       notify({ title: "Stitch queued — concatenating beats into master mp4", variant: "success" });
+      mutate();
+    } catch (e) {
+      notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    }
+  }
+
+  async function generateBranches() {
+    try {
+      const r = await api.generateBranches(id);
+      if (!r.ok) throw new Error("failed");
+      notify({
+        title: r.created
+          ? `${r.created} branch beat${r.created === 1 ? "" : "s"} queued (author → review → render, then re-publish to ship)`
+          : "No quizzes need branch beats (all covered or no wrong options)",
+        variant: "success",
+      });
       mutate();
     } catch (e) {
       notify({ title: e instanceof Error ? e.message : String(e), variant: "destructive" });
@@ -199,6 +215,11 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
             {renderedCount > 0 && (
               <Button variant="secondary" onClick={() => renderAll(true)}>
                 <Film className="w-4 h-4" />Re-render all
+              </Button>
+            )}
+            {mainBeats.some((b) => (b.quiz as { question?: string } | null)?.question) && (
+              <Button variant="secondary" onClick={generateBranches} title="Create remediation clips that play after a wrong quiz answer">
+                <GitBranch className="w-4 h-4" />Branch beats
               </Button>
             )}
             <Button variant="secondary" onClick={restitch}>

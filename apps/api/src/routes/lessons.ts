@@ -118,6 +118,80 @@ export const lessonsRoute = new Hono()
     }
     return c.json({ ok: true, queued: targets.length, jobIds });
   })
+  .post("/:id/branches", async (c) => {
+    /**
+     * Branching (LP-18): create one remediation ALT beat per quiz that has
+     * wrong options. Each alt beat is seeded with a misconception-targeting
+     * outline and queued through the NORMAL author → AI-review → render
+     * chain (~$0.10/beat); the parent quiz gains `branches` entries so the
+     * SCORM packager ships the clip and the player detours into it on a
+     * final wrong answer. Idempotent: quizzes whose alt beat already exists
+     * are skipped.
+     */
+    const id = c.req.param("id");
+    const lesson = await db.query.lessons.findFirst({ where: eq(tables.lessons.id, id) });
+    if (!lesson) return c.json({ error: "not_found" }, 404);
+    const beats = await db.select().from(tables.beats)
+      .where(eq(tables.beats.lessonId, id))
+      .orderBy(asc(tables.beats.order));
+    const main = beats.filter((b) => !b.isAlt);
+    const existingKeys = new Set(beats.map((b) => b.beatKey));
+
+    type Quiz = {
+      type?: string; question?: string;
+      options?: Array<{ id: string; text: string; isCorrect?: boolean; feedback?: string }>;
+      branches?: Array<{ onOptionId: string; altBeatKey: string; returnToBeatKey: string }>;
+    };
+    const created: Array<{ beatKey: string; forQuiz: string }> = [];
+    for (let i = 0; i < main.length; i++) {
+      const b = main[i]!;
+      const quiz = b.quiz as Quiz | null;
+      if (!quiz?.question || !Array.isArray(quiz.options)) continue;
+      // Reflection types have no wrong answer to remediate.
+      if (quiz.type === "likert" || quiz.type === "flashcard") continue;
+      const wrong = quiz.options.filter((o) => !o.isCorrect);
+      const correct = quiz.options.filter((o) => o.isCorrect);
+      if (wrong.length === 0 || correct.length === 0) continue;
+      const altKey = `${b.beatKey}_expl`;
+      if (existingKeys.has(altKey)) continue;
+
+      // Seed outline — the author worker expands this into real narration +
+      // visuals, exactly like an ingested beat outline.
+      const outline = [
+        `Remediation clip: plays ONLY for learners who just answered this check wrong, then the lesson resumes. Do not greet or recap the whole lesson — dive straight into untangling the misconception.`,
+        `The question they missed: "${quiz.question}"`,
+        `Correct answer: ${correct.map((o) => o.text).join("; ")}`,
+        `Wrong options they may have picked: ${wrong.map((o) => o.text + (o.feedback ? ` (why it tempts: ${o.feedback})` : "")).join("; ")}`,
+        `Re-explain the underlying idea from a DIFFERENT angle than the original teaching beat: name the likely misconception directly and warmly ("a lot of people pick this because…"), walk through why it fails, and end by affirming what the correct answer captures. 60–100 words of narration.`,
+      ].join("\n");
+
+      const [row] = await db.insert(tables.beats).values({
+        lessonId: id,
+        beatKey: altKey,
+        beatType: "concept",
+        order: b.order,
+        isAlt: true,
+        script: outline,
+        conceptsTaught: [],
+        conceptsRequired: (b.conceptsTaught ?? []) as string[],
+      }).returning({ id: tables.beats.id });
+
+      // Wire the parent quiz: every wrong option detours into the alt beat,
+      // returning at the next main beat (or resuming in place at the end).
+      const returnTo = main[i + 1]?.beatKey ?? "";
+      await db.update(tables.beats).set({
+        quiz: {
+          ...quiz,
+          branches: wrong.map((o) => ({ onOptionId: o.id, altBeatKey: altKey, returnToBeatKey: returnTo })),
+        },
+        updatedAt: new Date(),
+      }).where(eq(tables.beats.id, b.id));
+
+      await queues.author.add("author-branch-beat", { beatId: row!.id, isRevision: false });
+      created.push({ beatKey: altKey, forQuiz: b.beatKey });
+    }
+    return c.json({ ok: true, created: created.length, beats: created });
+  })
   .post("/:id/stitch", async (c) => {
     /** Manually trigger stitch (e.g. after a re-render fixes one beat). */
     const id = c.req.param("id");

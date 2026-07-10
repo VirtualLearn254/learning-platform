@@ -54,6 +54,8 @@ export const api = {
     fetchJson<{ ok: boolean; queued?: number; jobIds?: string[]; message?: string; error?: string }>(`/lessons/${id}/render${opts?.all ? "?all=true" : ""}`, { method: "POST" }),
   stitchLesson: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/stitch`, { method: "POST" }),
   publishLesson: (id: string) => fetchJson<{ ok: boolean; jobId: string }>(`/lessons/${id}/publish`, { method: "POST" }),
+  generateBranches: (id: string) =>
+    fetchJson<{ ok: boolean; created: number; beats: Array<{ beatKey: string; forQuiz: string }> }>(`/lessons/${id}/branches`, { method: "POST" }),
 
   // Beats
   listBeats: (params?: { stage?: BeatStage[]; lessonId?: string }) => {

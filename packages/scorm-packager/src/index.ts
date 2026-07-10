@@ -21,7 +21,7 @@ import type { Lesson, Beat } from "@lp/shared";
  * derived from the lesson id so re-packaging the same lesson always
  * produces the same manifest.
  */
-function buildManifest(lesson: { id: string; title: string; summary?: string | null; durationSec?: number }, opts: { organization?: string } = {}): string {
+function buildManifest(lesson: { id: string; title: string; summary?: string | null; durationSec?: number }, opts: { organization?: string; extraFiles?: string[] } = {}): string {
   const identifier = `LP_LESSON_${lesson.id.replace(/-/g, "").slice(0, 24)}`;
   const orgId = `${identifier}_ORG`;
   const itemId = `${identifier}_ITEM`;
@@ -71,6 +71,7 @@ function buildManifest(lesson: { id: string; title: string; summary?: string | n
       <file href="index.html"/>
       <file href="scorm-api.js"/>
       <file href="master.mp4"/>
+${(opts.extraFiles ?? []).map((f) => `      <file href="${xmlEscape(f)}"/>`).join("\n")}
     </resource>
   </resources>
 </manifest>
@@ -1789,6 +1790,20 @@ function buildPlayerHtml(lesson: { id?: string; title: string }, quizzes: ScormQ
     background: var(--q-accent, #22D3EE); color: var(--q-btn-ink, #101418);
   }
   .sm-btn.ghost { background: transparent; border: 1.5px solid var(--q-line, rgba(255,255,255,0.2)); color: var(--q-ink, #EEF2F5); }
+  /* Branch detour badge (LP-18): floats while a remediation clip plays. */
+  .br-badge {
+    position: absolute; top: 1rem; left: 50%; transform: translateX(-50%);
+    display: none; align-items: center; gap: 0.8rem; z-index: 30;
+    padding: 0.4rem 0.5rem 0.4rem 1rem; border-radius: 2rem;
+    background: rgba(10, 14, 18, 0.85); color: #EEF2F5;
+    font-size: 0.82rem; font-weight: 600; letter-spacing: 0.01em;
+  }
+  .br-badge.show { display: flex; }
+  .br-badge button {
+    border: 0; border-radius: 2rem; padding: 0.32rem 0.9rem; cursor: pointer;
+    font-weight: 700; font-family: inherit; font-size: 0.78rem;
+    background: #22D3EE; color: #101418;
+  }
 ${QUIZ_SCENE_CSS}
 </style>
 ${skin}
@@ -1808,6 +1823,7 @@ ${skin}
       <button class="cbtn" id="c-fs" title="Fullscreen (f)">&#x26F6;</button>
     </div>
     <div class="status" id="status">connecting…</div>
+    <div class="br-badge" id="br-badge">&#9670; <span id="br-label">Quick explanation</span><button id="br-skip">Skip &#9654;</button></div>
     <div class="hud" id="hud">
       <span id="hud-pts">0</span><span class="lbl">pts</span>
       <span class="hud-streak" id="hud-streak"></span>
@@ -1950,17 +1966,20 @@ ${QUIZ_ENGINE_JS}
     return m;
   }
   function gatedSeek(t) {
+    if (branching) return; // no scrubbing across a remediation detour
     var lim = firstUnanswered();
     if (lim !== Infinity && t > lim) t = lim;
     video.currentTime = Math.max(0, Math.min(t, video.duration || t));
   }
   // Backstop for any seek path that bypasses gatedSeek.
   video.addEventListener('seeking', function() {
+    if (branching) return; // branch-clip timeline ≠ master timeline
     var lim = firstUnanswered();
     if (lim !== Infinity && video.currentTime > lim + 0.01) video.currentTime = lim;
   });
 
   function buildMarkers() {
+    if (branching) return; // markers are master-video positions
     if (!video.duration) return;
     marksEl.innerHTML = '';
     QUIZZES.forEach(function(c, i) {
@@ -2066,6 +2085,59 @@ ${QUIZ_ENGINE_JS}
     if (overlay.classList.contains('open')) fitSceneToVideo();
   });
 
+  // ── Branching (LP-18): wrong answer → detour into a remediation clip ──
+  // The single <video> element swaps src to the packaged branch clip, plays
+  // it, then restores the master and resumes. While branching is true the
+  // cue scheduler, seek gate, markers and completion are all suspended —
+  // the detour is invisible to the master-video bookkeeping.
+  var MASTER_SRC = video.getAttribute('src');
+  var branching = false;
+  var branchWatched = {};   // cue index -> remediation shown once already
+  var brBadge = document.getElementById('br-badge');
+  var brLabel = document.getElementById('br-label');
+  var brSkip = document.getElementById('br-skip');
+  function playBranch(cue, idx, resumeSec) {
+    branching = true;
+    branchWatched[idx] = true;
+    brLabel.textContent = (cue.branch.label || 'Quick explanation');
+    brBadge.classList.add('show');
+    var finished = false;
+    var finish = function() {
+      if (finished) return;
+      finished = true;
+      brBadge.classList.remove('show');
+      video.removeEventListener('ended', finish);
+      video.src = MASTER_SRC;
+      var back = function() {
+        video.removeEventListener('loadedmetadata', back);
+        var target = Math.max(0, resumeSec);
+        // branching stays true until this seek LANDS — otherwise the restored
+        // master fires a timeupdate at ~0s that re-arms the cue, and the seek
+        // gate then clamps the resume back into the question.
+        video.currentTime = target;
+        var settleBack = function() {
+          video.removeEventListener('canplay', settleBack);
+          // A server without byte-range support bounces the early seek back
+          // to 0 — re-assert it once the media is actually playable.
+          if (Math.abs(video.currentTime - target) > 0.75) video.currentTime = target;
+          branching = false;
+          buildMarkers();
+          video.play();
+          pokeBar();
+        };
+        video.addEventListener('canplay', settleBack);
+      };
+      video.addEventListener('loadedmetadata', back);
+      video.load();
+    };
+    brSkip.onclick = finish;
+    video.addEventListener('ended', finish);
+    var start = function() { video.removeEventListener('loadedmetadata', start); video.play(); };
+    video.addEventListener('loadedmetadata', start);
+    video.src = cue.branch.file;
+    video.load();
+  }
+
   function showQuiz(cue, idx) {
     asked[idx] = true;
     video.pause();
@@ -2079,6 +2151,7 @@ ${QUIZ_ENGINE_JS}
     clearTimeout(hideTimer);
     // The shared engine renders the scene + interactions; the player only
     // does the video-side bookkeeping (score, seek gate, markers, resume).
+    var settledRight = null; // set by onSettle; onContinue branches on it
     window.__quizEngine.render(cue, {
       overlay: overlay,
       // Adaptivity (LP-12): while retries remain, wrong answers can rewind
@@ -2098,6 +2171,7 @@ ${QUIZ_ENGINE_JS}
         }, 360);
       },
       onSettle: function(right) {
+        settledRight = right;
         answeredCount++;
         done[idx] = true;    // unlocks forward seeking past this cue
         buildMarkers();      // marker flips to answered state
@@ -2106,9 +2180,17 @@ ${QUIZ_ENGINE_JS}
         recordInteraction(cue, idx, right); // capture the per-question SCORM record
       },
       onContinue: function(advanceTo) {
+        // Branching (LP-18): a FINAL wrong answer with a packaged remediation
+        // clip detours into it (once per question), then resumes the master —
+        // at the branch's return point, or right here when none is set.
+        var detour = cue.branch && settledRight === false && !branchWatched[idx];
         overlay.classList.remove('visible'); // crossfade back to the paused frame…
         setTimeout(function() {
           overlay.classList.remove('open');
+          if (detour) {
+            playBranch(cue, idx, cue.branch.resumeAtSec != null ? cue.branch.resumeAtSec : video.currentTime);
+            return;
+          }
           if (advanceTo != null) gatedSeek(advanceTo); // correct-answer skip-ahead
           video.play();                      // …then the video carries on.
           pokeBar();
@@ -2174,6 +2256,7 @@ ${QUIZ_ENGINE_JS}
 
   if (QUIZZES.length > 0) {
     video.addEventListener('timeupdate', function() {
+      if (branching) return; // detour clip time must not trigger master cues
       if (overlay.classList.contains('open')) return;
       for (var i = 0; i < QUIZZES.length; i++) {
         // Rewound to before this cue → re-arm it for replay.
@@ -2187,6 +2270,7 @@ ${QUIZ_ENGINE_JS}
   }
 
   video.addEventListener('ended', function() {
+    if (branching) return; // a branch clip ending is not lesson completion
     var pct = QUIZZES.length > 0 && answeredCount > 0
       ? Math.round((correctCount / QUIZZES.length) * 100)
       : 100; // plain video: watching to the end is full marks
@@ -2588,6 +2672,13 @@ export interface ScormQuizCue {
    *  advance: correct answer turns Continue into a skip-ahead to atSec. */
   retry?: { atSec: number; message?: string; maxAttempts: number; allowOptOut: boolean };
   advance?: { atSec: number; label?: string };
+  /** Branching (LP-18): a rendered remediation clip for this question. After
+   *  the FINAL wrong answer (retries exhausted or opted out) the player
+   *  detours into the clip, then returns to the master at resumeAtSec
+   *  (omitted = resume where it paused). `file` is a zip-relative path like
+   *  "alt/<beatKey>.mp4" — the clip ships INSIDE the package so LMS-hosted
+   *  lessons stay fully self-contained. Shown at most once per question. */
+  branch?: { file: string; resumeAtSec?: number; label?: string };
 }
 
 export interface ScormBuildInput {
@@ -2608,6 +2699,9 @@ export interface ScormBuildInput {
    *  visual language. Injected after the base scene CSS. Run lintQuizSkin()
    *  first; on lint failure ship without it (palette default applies). */
   quizSkinCss?: string;
+  /** Branch remediation clips packaged next to master.mp4, referenced by
+   *  cue.branch.file (e.g. "alt/<beatKey>.mp4"). */
+  altClips?: Array<{ path: string; data: Buffer }>;
   /** SCORM version target. 2004 4th Ed is the default and recommended. */
   version?: "2004_4";
   /** Where the player POSTs the completed attempt (our standalone results
@@ -2639,10 +2733,14 @@ export function createScormPackager(): ScormPackager {
     async build(input) {
       const playerHtml = buildPlayerHtml(input.lesson, input.quizzes ?? [], input.quizSkinCss, input.attemptsUrl);
       const zip = new JSZip();
-      zip.file("imsmanifest.xml", buildManifest(input.lesson, { organization: input.branding?.organizationName }));
+      zip.file("imsmanifest.xml", buildManifest(input.lesson, {
+        organization: input.branding?.organizationName,
+        extraFiles: (input.altClips ?? []).map((a) => a.path),
+      }));
       zip.file("index.html", playerHtml);
       zip.file("scorm-api.js", SCORM_API_JS);
       zip.file("master.mp4", input.masterMp4);
+      for (const alt of input.altClips ?? []) zip.file(alt.path, alt.data);
 
       const bytes = await zip.generateAsync({
         type: "nodebuffer",
