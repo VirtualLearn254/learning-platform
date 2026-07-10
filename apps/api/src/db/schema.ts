@@ -258,6 +258,24 @@ export const hermesRuns = pgTable("hermes_runs", {
   notes: text("notes").default("").notNull(),
 });
 
+/** LTI 1.1 grade-passback coordinates, captured at launch. When the player
+ *  later reports an attempt for (lessonId, learnerId), we replaceResult the
+ *  score into the LMS gradebook at outcomeUrl using sourcedid. */
+export const ltiLinks = pgTable("lti_links", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  lessonId: uuid("lesson_id").notNull().references(() => lessons.id, { onDelete: "cascade" }),
+  /** Matches attempts.learnerId ("name:lti_<lms user id>"). */
+  learnerId: text("learner_id").notNull(),
+  consumerKey: text("consumer_key").notNull(),
+  sourcedid: text("sourcedid").notNull(),
+  outcomeUrl: text("outcome_url").notNull(),
+  lastScorePct: integer("last_score_pct"),
+  lastGradeAt: timestamp("last_grade_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  linkIdx: index("lti_links_lesson_learner_idx").on(t.lessonId, t.learnerId),
+}));
+
 /** One completed play-through of a lesson by a learner — the standalone
  *  results store (LP-16). SCORM already reports to the host LMS; this table
  *  is OUR record, fed by the player at completion, so results exist even

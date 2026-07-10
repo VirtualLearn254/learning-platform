@@ -19,6 +19,8 @@ import { materialsRoute } from "./routes/materials.js";
 import { analyticsRoute } from "./routes/analytics.js";
 import { xapiRoute } from "./routes/xapi.js";
 import { attemptsRoute } from "./routes/attempts.js";
+import { ltiRoute } from "./routes/lti.js";
+import { publishRoute } from "./routes/publish.js";
 import { hermesRoute } from "./routes/hermes.js";
 import { searchRoute } from "./routes/search.js";
 import { stylesRoute } from "./routes/styles.js";
@@ -48,7 +50,7 @@ app.use("*", cors({
  * session token as Bearer (automation). When LP_ADMIN_PASSWORD is unset,
  * the gate is open — dev mode — and we say so loudly at boot.
  */
-const PUBLIC_PREFIXES = ["/health", "/auth", "/xapi"];
+const PUBLIC_PREFIXES = ["/health", "/auth", "/xapi", "/lti"];
 
 app.use("*", async (c, next) => {
   if (!authEnabled()) return next();
@@ -71,6 +73,8 @@ app.route("/materials", materialsRoute);
 app.route("/analytics", analyticsRoute);
 app.route("/xapi",      xapiRoute);
 app.route("/attempts",  attemptsRoute);
+app.route("/lti",       ltiRoute);
+app.route("/publish",   publishRoute);
 app.route("/hermes",    hermesRoute);
 app.route("/search",    searchRoute);
 app.route("/styles",    stylesRoute);

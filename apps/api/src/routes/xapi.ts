@@ -7,10 +7,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { XApiStatement } from "@lp/lrs";
 
 import { db, tables } from "../db/index.js";
+import { sendLtiGrade } from "../lib/lti.js";
 import { lrs } from "../workers/services.js";
 
 /** Attempt ingest payload — sent by the packaged player at completion (LP-16).
@@ -43,6 +44,34 @@ export const xapiRoute = new Hono()
     const lesson = await db.query.lessons.findFirst({ where: eq(tables.lessons.id, input.lessonId) });
     if (!lesson) return c.json({ error: "unknown lesson" }, 404);
     const [row] = await db.insert(tables.attempts).values(input).returning({ id: tables.attempts.id });
+
+    // LTI grade passback: if this learner launched from an LMS, push the
+    // score into its gradebook. Best-effort — a passback failure never
+    // affects the stored attempt.
+    void (async () => {
+      try {
+        const link = await db.query.ltiLinks.findFirst({
+          where: and(eq(tables.ltiLinks.lessonId, input.lessonId), eq(tables.ltiLinks.learnerId, input.learnerId)),
+        });
+        const key = process.env.LTI_CONSUMER_KEY, secret = process.env.LTI_CONSUMER_SECRET;
+        if (!link || !key || !secret) return;
+        const res = await sendLtiGrade({
+          outcomeUrl: link.outcomeUrl, sourcedid: link.sourcedid,
+          score01: Math.max(0, Math.min(1, input.scorePct / 100)),
+          consumerKey: key, consumerSecret: secret,
+        });
+        if (res.ok) {
+          await db.update(tables.ltiLinks).set({ lastScorePct: input.scorePct, lastGradeAt: new Date() })
+            .where(eq(tables.ltiLinks.id, link.id));
+          console.log(`[lti] grade passback ok: lesson=${input.lessonId} learner=${input.learnerId} score=${input.scorePct}%`);
+        } else {
+          console.warn(`[lti] grade passback failed (${res.status}): ${res.body.slice(0, 150)}`);
+        }
+      } catch (err) {
+        console.warn(`[lti] grade passback error:`, err instanceof Error ? err.message : err);
+      }
+    })();
+
     return c.json({ ok: true, attemptId: row!.id }, 201);
   })
   .post("/statements", async (c) => {
