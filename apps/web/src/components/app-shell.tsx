@@ -234,14 +234,14 @@ export function PageHeader({ title, description, actions, breadcrumbs, compact }
     );
   }
   return (
-    <div className="shrink-0 px-12 py-6 border-b border-[var(--color-border)]">
-      {breadcrumbs && <div className="mb-3">{breadcrumbs}</div>}
+    <div className="shrink-0 px-6 py-3.5 border-b border-[var(--color-border)]">
+      {breadcrumbs && <div className="mb-2">{breadcrumbs}</div>}
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-3xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
+          <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
             {title}
           </h1>
-          {description && <p className="text-sm text-[var(--color-muted)] mt-1">{description}</p>}
+          {description && <p className="text-xs text-[var(--color-muted)] mt-0.5">{description}</p>}
         </div>
         {actions && <div className="flex gap-2 flex-wrap">{actions}</div>}
       </div>
@@ -250,5 +250,5 @@ export function PageHeader({ title, description, actions, breadcrumbs, compact }
 }
 
 export function PageBody({ children, padding }: { children: ReactNode; padding?: string }) {
-  return <div className={`flex-1 overflow-y-auto overflow-x-hidden ${padding ?? "p-12"}`}>{children}</div>;
+  return <div className={`flex-1 overflow-y-auto overflow-x-hidden ${padding ?? "p-6"}`}>{children}</div>;
 }
