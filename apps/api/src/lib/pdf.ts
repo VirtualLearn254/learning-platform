@@ -111,7 +111,11 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
   const page = await browser.newPage();
   try {
     await page.setContent(html, { waitUntil: "networkidle0", timeout: 20_000 });
-    const pdf = await page.pdf({ format: "A4", printBackground: true, margin: { top: "0", bottom: "0", left: "0", right: "0" } });
+    // Real printer margins on EVERY page: CSS body padding only spaces the
+    // first and last page — mid-document page breaks would otherwise cut
+    // text flush at the paper edge. Horizontal spacing stays with the
+    // document's own CSS so full-width designs keep their side layout.
+    const pdf = await page.pdf({ format: "A4", printBackground: true, margin: { top: "14mm", bottom: "14mm", left: "0", right: "0" } });
     return Buffer.from(pdf);
   } finally {
     await page.close();

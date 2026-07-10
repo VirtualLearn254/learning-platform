@@ -47,7 +47,7 @@ CONTENT STRUCTURE (adapt headings to the subject, keep the skeleton):
 DESIGN RULES (strict):
 - Output ONE complete self-contained HTML document. Inline <style> only. No external fonts, scripts, or images. No <img> with URLs.
 - Illustrations: inline SVG only — simple, purposeful diagrams (flows, comparisons, timelines, labeled parts), plus small inline SVG icons for section markers. Illustrate where a picture genuinely clarifies; never decorate for its own sake.
-- Print: A4 portrait. Use @page { size: A4; margin: 0; } and give the body padding of roughly 18mm 16mm. Define .page-break { page-break-before: always; }. Avoid elements taller than one page; let text flow.
+- Print: A4 portrait. The renderer adds 14mm top/bottom printer margins to EVERY page — do not add large vertical padding of your own; give the body horizontal padding of roughly 16mm and let vertical breathing room come from the margins. Define .page-break { page-break-before: always; }. Avoid elements taller than one page; let text flow.
 - Branding: you will be given the lesson's palette (bg/ink/muted/accent/surface). Body text stays near-black on white for print readability; use the palette for the cover band, headings, rules, boxes and SVG accents so the document visibly belongs to the same course as the video.
 - Typography: system font stack (e.g. -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif); comfortable line-height (1.55+); real hierarchy (cover > h1 > h2 > boxes); never cram.
 
