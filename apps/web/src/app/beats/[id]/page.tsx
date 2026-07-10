@@ -104,6 +104,7 @@ function CorrectionStudio({ beatId, mp4Url, onRerender }: { beatId: string; mp4U
   }
 
   const frames = data?.frames ?? [];
+  const verifyFrames = data?.verifyFrames ?? [];
   return (
     <Card className="p-6">
       <h3 className="font-semibold mb-1">Preview &amp; fix</h3>
@@ -111,6 +112,19 @@ function CorrectionStudio({ beatId, mp4Url, onRerender }: { beatId: string; mp4U
         Scrub to the moment that&apos;s wrong (or click a keyframe to jump there), describe the fix — attach an annotated image if it helps — then re-render (~$0.10).
       </p>
       <video ref={videoRef} src={mp4Url} controls className="w-full rounded-lg border border-[var(--color-border)] bg-black aspect-video" />
+      {verifyFrames.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          {verifyFrames.map((v) => (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <figure key={v.key} className="min-w-0">
+              <img src={fileUrl(v.key)} alt={v.label}
+                className="w-full aspect-video object-cover rounded border border-[var(--color-border)] bg-[var(--color-bg)]"
+                onError={(e) => { (e.target as HTMLImageElement).closest("figure")!.style.display = "none"; }} />
+              <figcaption className="text-[10px] text-[var(--color-muted)] mt-0.5 text-center uppercase tracking-wide">{v.label}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
       {frames.length > 0 && (
         <div className="flex gap-1.5 overflow-x-auto mt-3 pb-1">
           {frames.map((f, i) => (
@@ -236,6 +250,13 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
             <Button
               size="sm"
               variant="secondary"
+              onClick={() => document.getElementById("beat-editor")?.scrollIntoView({ behavior: "smooth" })}
+            >
+              Edit script
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
               onClick={() => act("Author", () => api.authorBeat(id))}
             >
               <Wand2 className="w-3.5 h-3.5" />
@@ -285,26 +306,6 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
               </Card>
             )}
 
-            {beat.htmlKey && (
-              <Card className="p-6">
-                <h3 className="font-semibold mb-1">Design frames</h3>
-                <p className="text-xs text-[var(--color-muted)] mb-3">
-                  The three frames the vision verifier judged — entrance · hero · settle.
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  {[1, 2, 3].map((i) => (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      key={i}
-                      src={`/api/files/${encodeURIComponent(`beats/${beat.id}/verify-${i}.png`)}`}
-                      alt={["entrance", "hero", "settle"][i - 1]}
-                      className="rounded-lg border border-[var(--color-border)] w-full aspect-video object-cover bg-[var(--color-bg)]"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
-                  ))}
-                </div>
-              </Card>
-            )}
 
             {(beat.reviewScore !== null || (beat.reviewIssues && beat.reviewIssues.length > 0)) && (
               <Card className="p-6">
@@ -318,7 +319,7 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
               </Card>
             )}
 
-            <Card className="p-6">
+            <Card className="p-6" id="beat-editor">
               <Tabs defaultValue="edit">
                 <TabsList>
                   <TabsTrigger value="edit">Edit</TabsTrigger>
@@ -342,27 +343,20 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
           </div>
 
           <div className="space-y-6">
-            <Card className="p-6">
-              <h3 className="font-semibold mb-3">Your review</h3>
-              {beat.stage === "human_review" ? (
+            {beat.stage === "human_review" && (
+              <Card className="p-6 border-amber-300">
+                <h3 className="font-semibold mb-3">Your review</h3>
                 <FeedbackForm onSubmit={async (input) => { await submitFeedback(input); router.push("/kanban"); }} />
-              ) : (
-                <p className="text-sm text-[var(--color-muted)]">
-                  This beat isn't awaiting human review right now.
-                </p>
-              )}
-            </Card>
+              </Card>
+            )}
 
             <Card className="p-6">
               <h3 className="font-semibold mb-3">Metadata</h3>
               <dl className="text-sm space-y-2">
-                <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Duration</dt><dd>{beat.durationSeconds ? `${beat.durationSeconds.toFixed(1)}s` : "—"}</dd></div>
-                <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Beat type</dt><dd>{beat.beatType}</dd></div>
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Order</dt><dd>{beat.order}</dd></div>
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Alt beat</dt><dd>{beat.isAlt ? "yes" : "no"}</dd></div>
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Concepts taught</dt><dd>{beat.conceptsTaught.length || "—"}</dd></div>
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Concepts required</dt><dd>{beat.conceptsRequired.length || "—"}</dd></div>
-                <div className="flex justify-between"><dt className="text-[var(--color-muted)]">AI spend</dt><dd className="tabular-nums">{data.aiCostUsd > 0 ? `$${data.aiCostUsd.toFixed(3)}` : "—"}</dd></div>
               </dl>
             </Card>
 
