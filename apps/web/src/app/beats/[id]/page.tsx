@@ -12,7 +12,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StageBadge } from "@/components/stage-badge";
 import { FeedbackForm } from "@/components/feedback-form";
-import { VideoPlayer } from "@/components/video-player";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BeatEditor } from "@/components/beat-editor";
 import { JobTimeline } from "@/components/job-timeline";
@@ -20,6 +19,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ReviewIssues } from "@/components/review-issues";
 import { ErrorState } from "@/components/error-state";
 import { useToast } from "@/lib/use-toast";
+import { ContextStrip, Chip } from "@/components/context-strip";
+import { ThumbsUp, RotateCcw } from "lucide-react";
 
 /**
  * Render history: every versioned MP4 for this beat, newest first. Pick two
@@ -105,7 +106,7 @@ function CorrectionStudio({ beatId, mp4Url, onRerender }: { beatId: string; mp4U
   const frames = data?.frames ?? [];
   return (
     <Card className="p-6">
-      <h3 className="font-semibold mb-1">Fix this beat</h3>
+      <h3 className="font-semibold mb-1">Preview &amp; fix</h3>
       <p className="text-xs text-[var(--color-muted)] mb-3">
         Scrub to the moment that&apos;s wrong (or click a keyframe to jump there), describe the fix — attach an annotated image if it helps — then re-render (~$0.10).
       </p>
@@ -146,6 +147,8 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
   const router = useRouter();
   const { notify } = useToast();
   const { data, error, mutate, isLoading } = useSWR(`beat-${id}`, () => api.getBeat(id), { refreshInterval: 4000 });
+  const lessonId = data?.beat?.lessonId;
+  const { data: siblingsData } = useSWR(lessonId ? `beat-siblings-${lessonId}` : null, () => api.listBeats({ lessonId: lessonId! }));
 
   /** Run an action with toast feedback — no more silent buttons. */
   async function act(label: string, fn: () => Promise<unknown>) {
@@ -184,11 +187,49 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
   const previewUrl = beat.mp4Key ? `/api/files/${encodeURIComponent(beat.mp4Key)}` : null;
   const courseId = data.breadcrumbs?.find((c) => c.kind === "course")?.id ?? undefined;
 
+  // Siblings for prev/next stepping (the reviewer loop: check → next → check).
+  const siblings = (siblingsData?.beats ?? [])
+    .filter((b) => !b.isAlt)
+    .sort((a, b) => a.order - b.order);
+  const idx = siblings.findIndex((b) => b.id === id);
+  const prevBeat = idx > 0 ? siblings[idx - 1] : null;
+  const nextBeat = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null;
+
+  async function quickReview(action: "approve" | "revise") {
+    await submitFeedback({ action, feedback: action === "approve" ? "Approved from header." : "Revise — flagged from header; see AI review issues.", screenshotKeys: [] });
+    notify({ title: action === "approve" ? "Approved" : "Sent back for revision", variant: "success" });
+    if (action === "approve" && nextBeat) router.push(`/beats/${nextBeat.id}`);
+  }
+
   return (
     <AppShell courseId={courseId}>
       <PageHeader
         title={beat.beatKey}
-        description={`${beat.beatType} · revision ${beat.revisionCount} · stage:`}
+        breadcrumbs={
+          <ContextStrip
+            prevHref={prevBeat ? `/beats/${prevBeat.id}` : null}
+            nextHref={nextBeat ? `/beats/${nextBeat.id}` : null}
+            position={idx >= 0 ? `${idx + 1} / ${siblings.length}` : undefined}
+          >
+            <Chip value={beat.beatType} />
+            {beat.reviewScore != null && <Chip label="score" value={`${beat.reviewScore}/100`} tone={beat.reviewScore >= 85 ? "accent" : "muted"} />}
+            {beat.durationSeconds ? <Chip label="dur" value={`${beat.durationSeconds.toFixed(0)}s`} /> : null}
+            {beat.revisionCount > 0 && <Chip label="rev" value={beat.revisionCount} tone="warn" />}
+            {data.aiCostUsd > 0 && <Chip label="spend" value={`$${data.aiCostUsd.toFixed(2)}`} />}
+            {beat.stage === "human_review" && (
+              <span className="inline-flex items-center gap-1.5 ml-1">
+                <button onClick={() => quickReview("approve")}
+                  className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md bg-[var(--color-accent)] text-white hover:opacity-90">
+                  <ThumbsUp className="w-3 h-3" /> Approve{nextBeat ? " → next" : ""}
+                </button>
+                <button onClick={() => quickReview("revise")}
+                  className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg)]">
+                  <RotateCcw className="w-3 h-3" /> Revise
+                </button>
+              </span>
+            )}
+          </ContextStrip>
+        }
         actions={
           <div className="flex items-center gap-2">
             <StageBadge stage={beat.stage} />
@@ -225,19 +266,23 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
       <PageBody>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <Card className="p-6">
-              <h3 className="font-semibold mb-3">Preview</h3>
-              {previewUrl ? (
-                <VideoPlayer src={previewUrl} controls />
-              ) : (
+            {beat.errorMessage && (
+              <Card className="p-5 border-[var(--color-accent-2)]">
+                <h3 className="font-semibold mb-1 text-[var(--color-accent-2)]">Last error</h3>
+                <p className="text-sm">{beat.errorMessage}</p>
+              </Card>
+            )}
+
+            {previewUrl ? (
+              /* One video, two jobs: preview AND fix — no duplicate players. */
+              <CorrectionStudio beatId={id} mp4Url={previewUrl} onRerender={() => { notify({ title: "Re-render queued with your correction", variant: "success" }); mutate(); }} />
+            ) : (
+              <Card className="p-6">
+                <h3 className="font-semibold mb-3">Preview</h3>
                 <div className="aspect-video bg-[var(--color-bg)] rounded-xl flex items-center justify-center">
                   <p className="text-sm text-[var(--color-muted)]">No MP4 rendered yet</p>
                 </div>
-              )}
-            </Card>
-
-            {previewUrl && (
-              <CorrectionStudio beatId={id} mp4Url={previewUrl} onRerender={() => { notify({ title: "Re-render queued with your correction", variant: "success" }); mutate(); }} />
+              </Card>
             )}
 
             {beat.htmlKey && (
@@ -294,12 +339,6 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
               </Tabs>
             </Card>
 
-            {beat.errorMessage && (
-              <Card className="p-6 border-[var(--color-accent-2)]">
-                <h3 className="font-semibold mb-2 text-[var(--color-accent-2)]">Last error</h3>
-                <p className="text-sm">{beat.errorMessage}</p>
-              </Card>
-            )}
           </div>
 
           <div className="space-y-6">

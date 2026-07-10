@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { VideoPlayer } from "@/components/video-player";
 import { BeatRow } from "@/components/beat-row";
+import { ContextStrip, Chip } from "@/components/context-strip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReviewIssues } from "@/components/review-issues";
 import { ErrorState } from "@/components/error-state";
@@ -45,6 +46,8 @@ function JobPill({ label, job }: { label: string; job: LessonJobSummary | null }
 export default function LessonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, error, mutate, isLoading } = useSWR(`lesson-${id}`, () => api.getLesson(id), { refreshInterval: 5000 });
+  const cid = data?.breadcrumbs?.find((c) => c.kind === "course")?.id;
+  const { data: treeData } = useSWR(cid ? `course-tree-${cid}` : null, () => api.getCourseTree(cid!));
   const { notify } = useToast();
 
   async function authorAll(reauthor = false) {
@@ -149,12 +152,30 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
   const renderingNow    = mainBeats.filter((b) => b.stage === "rendering").length;
 
   const courseId = data.breadcrumbs?.find((c) => c.kind === "course")?.id ?? undefined;
+  const courseLessons = (treeData?.tree.sections ?? [])
+    .flatMap((s) => s.modules.flatMap((m) => m.lessons));
+  const lIdx = courseLessons.findIndex((l) => l.id === id);
+  const prevLesson = lIdx > 0 ? courseLessons[lIdx - 1] : null;
+  const nextLesson = lIdx >= 0 && lIdx < courseLessons.length - 1 ? courseLessons[lIdx + 1] : null;
 
   return (
     <AppShell courseId={courseId}>
       <PageHeader
         title={lesson.title}
         description={lesson.summary ?? undefined}
+        breadcrumbs={
+          <ContextStrip
+            prevHref={prevLesson ? `/lessons/${prevLesson.id}` : null}
+            nextHref={nextLesson ? `/lessons/${nextLesson.id}` : null}
+            position={lIdx >= 0 ? `${lIdx + 1} / ${courseLessons.length}` : undefined}
+          >
+            <Chip label="beats" value={mainBeats.length} />
+            {data.aiCostUsd > 0 && <Chip label="spend" value={`$${data.aiCostUsd.toFixed(2)}`} />}
+            {lesson.publishedAt
+              ? <Chip value={`published ${new Date(lesson.publishedAt).toLocaleDateString()}`} tone="accent" />
+              : <Chip value="unpublished" tone="warn" />}
+          </ContextStrip>
+        }
         actions={
           <div className="flex gap-2 flex-wrap">
             {ingestedCount > 0 && (
