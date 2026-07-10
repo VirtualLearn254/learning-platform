@@ -183,9 +183,10 @@ export default function BeatDetail({ params }: { params: Promise<{ id: string }>
 
   const beat = data.beat;
   const previewUrl = beat.mp4Key ? `/api/files/${encodeURIComponent(beat.mp4Key)}` : null;
+  const courseId = data.breadcrumbs?.find((c) => c.kind === "course")?.id ?? undefined;
 
   return (
-    <AppShell>
+    <AppShell courseId={courseId}>
       <PageHeader
         title={beat.beatKey}
         description={`${beat.beatType} · revision ${beat.revisionCount} · stage:`}

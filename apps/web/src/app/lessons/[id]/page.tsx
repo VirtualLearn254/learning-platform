@@ -149,8 +149,10 @@ export default function LessonDetail({ params }: { params: Promise<{ id: string 
   const renderedCount   = mainBeats.filter((b) => !!b.mp4Key).length;
   const renderingNow    = mainBeats.filter((b) => b.stage === "rendering").length;
 
+  const courseId = data.breadcrumbs?.find((c) => c.kind === "course")?.id ?? undefined;
+
   return (
-    <AppShell>
+    <AppShell courseId={courseId}>
       <PageHeader
         title={lesson.title}
         description={lesson.summary ?? undefined}

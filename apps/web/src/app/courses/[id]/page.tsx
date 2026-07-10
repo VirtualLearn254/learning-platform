@@ -135,7 +135,7 @@ export default function CourseDetail({ params }: { params: Promise<{ id: string 
   const anyBeats = lessonLanes.some((l) => l.total > 0);
 
   return (
-    <AppShell>
+    <AppShell courseId={tree.id}>
       <PageHeader
         title={tree.title}
         description={tree.summary ?? undefined}

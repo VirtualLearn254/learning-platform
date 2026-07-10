@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, KanbanSquare, BarChart3, Settings, Sparkles, Home, Palette, FileText, Activity, ClipboardCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  BookOpen, KanbanSquare, BarChart3, Settings, Sparkles, Home, Palette,
+  FileText, Activity, ClipboardCheck, PanelLeftClose, PanelLeftOpen,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { CommandPalette } from "@/components/command-palette";
+import { CourseTreePanel } from "@/components/course-tree-panel";
 
 interface NavItem {
   href: string;
@@ -26,20 +31,42 @@ const NAV: NavItem[] = [
   { href: "/settings",   label: "Settings",   icon: Settings },
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, courseId }: { children: ReactNode; courseId?: string }) {
   const pathname = usePathname();
+  // Collapsed = icon-only rail. Persisted; read after mount to avoid a
+  // server/client hydration mismatch (SSR can't see localStorage).
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try { setCollapsed(localStorage.getItem("lp_nav_collapsed") === "1"); } catch { /* private mode */ }
+  }, []);
+  function toggleCollapsed() {
+    setCollapsed((c) => {
+      try { localStorage.setItem("lp_nav_collapsed", c ? "0" : "1"); } catch { /* private mode */ }
+      return !c;
+    });
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <CommandPalette />
       {/* ── Left nav: header pinned, link list scrolls, status pinned ── */}
-      <aside className="w-60 bg-white border-r border-[var(--color-border)] flex flex-col">
-        <div className="shrink-0 px-6 py-6 border-b border-[var(--color-border)]">
-          <Link href="/" className="text-lg font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
-            learning-platform
-          </Link>
-          <p className="text-xs text-[var(--color-muted)] mt-1">internal · v0.1</p>
+      <aside className={cn(
+        "bg-white border-r border-[var(--color-border)] flex flex-col transition-[width] duration-200",
+        collapsed ? "w-16" : "w-60",
+      )}>
+        <div className={cn("shrink-0 border-b border-[var(--color-border)] flex items-center", collapsed ? "px-0 py-4 justify-center" : "px-6 py-6 justify-between")}>
+          {collapsed ? (
+            <Link href="/" title="learning-platform" className="text-lg font-semibold" style={{ fontFamily: "var(--font-display)" }}>lp</Link>
+          ) : (
+            <div className="min-w-0">
+              <Link href="/" className="text-lg font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
+                learning-platform
+              </Link>
+              <p className="text-xs text-[var(--color-muted)] mt-1">internal · v0.2</p>
+            </div>
+          )}
         </div>
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        <nav className={cn("flex-1 overflow-y-auto space-y-1", collapsed ? "p-2" : "p-3")}>
           {NAV.map((item) => {
             const active = item.href === "/"
               ? pathname === "/"
@@ -48,26 +75,38 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                title={collapsed ? item.label : undefined}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                  "flex items-center gap-3 rounded-lg text-sm transition-colors",
+                  collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2",
                   active
                     ? "bg-[var(--color-ink)] text-white"
                     : "text-[var(--color-ink)] hover:bg-[var(--color-bg)]",
                 )}
               >
-                <item.icon className="w-4 h-4" />
-                {item.label}
+                <item.icon className="w-4 h-4 shrink-0" />
+                {!collapsed && item.label}
               </Link>
             );
           })}
         </nav>
-        <div className="shrink-0 p-4 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)] flex items-center justify-between">
-          <span>v0.2</span>
-          <span className="inline-flex items-center gap-1">
-            <kbd className="border border-[var(--color-border)] rounded px-1 py-0.5 text-[10px]">Ctrl</kbd>
-            <kbd className="border border-[var(--color-border)] rounded px-1 py-0.5 text-[10px]">K</kbd>
-            search
-          </span>
+        {/* Course tree for the course you're inside (hidden on the icon rail). */}
+        {courseId && !collapsed && <CourseTreePanel courseId={courseId} />}
+        <div className={cn("shrink-0 border-t border-[var(--color-border)] text-xs text-[var(--color-muted)] flex items-center", collapsed ? "p-2 justify-center" : "p-3 justify-between")}>
+          {!collapsed && (
+            <span className="inline-flex items-center gap-1">
+              <kbd className="border border-[var(--color-border)] rounded px-1 py-0.5 text-[10px]">Ctrl</kbd>
+              <kbd className="border border-[var(--color-border)] rounded px-1 py-0.5 text-[10px]">K</kbd>
+              search
+            </span>
+          )}
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="p-1.5 rounded-md hover:bg-[var(--color-bg)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+          >
+            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
         </div>
       </aside>
       {/* ── Main column: column-flex so PageHeader stays + PageBody scrolls ── */}
