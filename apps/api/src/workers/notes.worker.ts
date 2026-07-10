@@ -135,7 +135,19 @@ export function startNotesWorker() {
       });
       await note(`AI returned ${ai.text.length} chars (in=${ai.usage.inputTokens} out=${ai.usage.outputTokens}) · rendering PDF`);
 
-      let html = ai.text.replace(/^```(?:html)?\s*/i, "").replace(/```\s*$/i, "").trim();
+      // Reasoning-style models (GLM) think out loud around — and between —
+      // drafts. Proven live: the first run shipped "Let me design…" prose
+      // into the PDF. Strip <think> blocks, then keep ONLY the last complete
+      // <!doctype…</html> document (the final draft); everything before or
+      // after it is commentary.
+      let html = ai.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      {
+        const lower = html.toLowerCase();
+        const start = Math.max(lower.lastIndexOf("<!doctype"), lower.lastIndexOf("<html"));
+        const end = lower.lastIndexOf("</html>");
+        if (start >= 0 && end > start) html = html.slice(start, end + "</html>".length);
+      }
+      html = html.replace(/^```(?:html)?\s*/i, "").replace(/```\s*$/i, "").trim();
       if (!/<html[\s>]/i.test(html)) {
         html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${html}</body></html>`;
       }

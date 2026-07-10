@@ -89,6 +89,7 @@ function buildUserPrompt(args: {
   script: string;
   onScreenText: string[];
   callouts: string[];
+  isAlt?: boolean;
   earlierBeats: Array<{ beatType: string; beatKey: string; script: string }>;
 }): string {
   const earlier = args.earlierBeats.length === 0 ? "(none)" : args.earlierBeats.map((b) => `  [${b.beatType}] ${b.beatKey}: ${b.script.slice(0, 200)}`).join("\n");
@@ -96,6 +97,9 @@ function buildUserPrompt(args: {
     `COURSE: ${args.courseTitle}`,
     `LESSON: ${args.lessonTitle}`,
     `THIS BEAT: ${args.beatKey} (type: ${args.beatType}, position ${args.beatOrder + 1} of ${args.beatsInLesson})`,
+    ...(args.isAlt ? [
+      `NOTE: this is a REMEDIATION BRANCH clip (LP-18) — it plays only for learners who answered the lesson's quiz wrong, then the lesson resumes. It is typed "${args.beatType}" by design even when its key ends in _expl; it should address the misconception directly and must NOT pose a new question. Do not flag its name/type pairing or its assumption that the learner just answered incorrectly.`,
+    ] : []),
     "",
     `SCRIPT (${args.script.trim().split(/\s+/).length} words):`,
     args.script,
@@ -166,6 +170,7 @@ export function startAIReviewWorker() {
             script: beat.script,
             onScreenText: visual.onScreenText ?? [],
             callouts: visual.callouts ?? [],
+            isAlt: beat.isAlt,
             earlierBeats,
           }) },
         ],
