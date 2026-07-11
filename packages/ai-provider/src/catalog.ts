@@ -29,7 +29,10 @@ export interface ModelInfo {
 
 export const MODEL_CATALOG: Record<ProviderId, ModelInfo[]> = {
   anthropic: [
-    { id: "claude-opus-4-8",              displayName: "Claude Opus 4.8",   inputPer1M: 15.0, outputPer1M: 75.0, supportsVision: true,  speed: "slow",      tier: "frontier" },
+    // Opus 4.5 dropped Opus-class pricing to $5/$25 and 4.8 kept it — the old
+    // $15/$75 here made the overspend guard treat Opus as 17× GLM output-cost
+    // when it is really ~5.7×.
+    { id: "claude-opus-4-8",              displayName: "Claude Opus 4.8",   inputPer1M:  5.0, outputPer1M: 25.0, supportsVision: true,  speed: "slow",      tier: "frontier" },
     { id: "claude-sonnet-4-6",            displayName: "Claude Sonnet 4.6", inputPer1M:  3.0, outputPer1M: 15.0, supportsVision: true,  speed: "balanced",  tier: "mid" },
     { id: "claude-haiku-4-5-20251001",    displayName: "Claude Haiku 4.5",  inputPer1M:  1.0, outputPer1M:  5.0, supportsVision: true,  speed: "fast",      tier: "cheap" },
   ],
