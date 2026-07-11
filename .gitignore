@@ -48,3 +48,4 @@ apps/api/scripts/.quiz-preview-*/
 apps/api/scripts/quiz-preview-*.png
 apps/api/scripts/quiz-style-gallery.html
 apps/api/scripts/quiz-skin-draft.css
+producer-digests/
