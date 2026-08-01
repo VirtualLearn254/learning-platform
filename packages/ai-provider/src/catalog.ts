@@ -42,6 +42,11 @@ export const MODEL_CATALOG: Record<ProviderId, ModelInfo[]> = {
     { id: "o1",                           displayName: "o1 (reasoning)",     inputPer1M: 15.0,  outputPer1M: 60.0,  supportsVision: false, speed: "slow",    tier: "frontier" },
     { id: "o1-mini",                      displayName: "o1 mini (reasoning)",inputPer1M:  3.0,  outputPer1M: 12.0,  supportsVision: false, speed: "balanced",tier: "mid" },
   ],
+  moonshot: [
+    // Kimi K3 (Moonshot direct API): native vision, 1M context, near-frontier.
+    // Cached input is $0.30/M on Moonshot direct — the big saving for agent loops.
+    { id: "kimi-k3", displayName: "Kimi K3 (Moonshot)", inputPer1M: 3.0, outputPer1M: 15.0, supportsVision: true, speed: "balanced", tier: "frontier" },
+  ],
   fireworks: [
     { id: "accounts/fireworks/models/glm-5p2", displayName: "GLM 5.2 (Z.ai)", inputPer1M: 1.40, outputPer1M: 4.40, speed: "balanced", tier: "frontier" },
   ],

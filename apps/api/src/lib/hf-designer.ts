@@ -17,6 +17,7 @@
 
 import type { createAIClient } from "@lp/ai-provider";
 import type { WordTimestamp } from "./tts.js";
+import { devicePaletteBlock, resolveDevices } from "./visual-devices.js";
 
 type AIClient = ReturnType<typeof createAIClient>;
 
@@ -49,6 +50,10 @@ export interface DesignBeatInput {
    *  beat page's edit panel (text, or a vision-derived instruction from an
    *  attached reference image). Highest priority in the design. */
   correction?: string;
+  /** Named visual devices (LP-20) chosen by the author — resolved against the
+   *  visual-devices library and injected as a compose-from palette. Unknown
+   *  ids are ignored. */
+  devices?: string[];
 }
 
 const SYSTEM_PROMPT = `You are a motion designer authoring HyperFrames video compositions — HTML files that a capture engine renders frame-by-frame into MP4. You design educational explainer beats for an adult professional audience: editorial, confident, never cartoonish.
@@ -239,6 +244,7 @@ BEAT: ${input.beatKey} (type: ${input.beatType})
 LESSON: ${input.lessonTitle}
 COMPOSITION DURATION: ${dur.toFixed(1)}s exactly — set data-duration="${dur.toFixed(1)}" on the root composition div.
 ALL MOTION SETTLED BY: ${settleAt}s.
+${devicePaletteBlock(resolveDevices(input.devices), dur)}
 
 NARRATION (already recorded; the audio file is assets/narration.mp3):
 """
@@ -391,6 +397,9 @@ export async function designAnimatedBeat(
         { role: "system", content: system },
         { role: "user", content: user },
       ],
+      // Device-palette briefs make the designer more ambitious — the A/B test
+      // blew the default 20K output budget mid-document. Give it headroom.
+      ...(resolveDevices(input.devices).length > 0 ? { maxTokens: 32000 } : {}),
       meta: input.meta,
     });
     const html = extractHtml(res.text);

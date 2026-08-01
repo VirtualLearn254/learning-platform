@@ -16,6 +16,7 @@ import { QueueNames, queues } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
 import { getAIClient } from "../lib/ai_client.js";
 import { getRulesBlock } from "../lib/rules.js";
+import { deviceCatalogForAuthor, resolveDevices } from "../lib/visual-devices.js";
 
 interface JobData { beatId: string; isRevision: boolean }
 
@@ -25,6 +26,10 @@ const VisualSpecOut = z.object({
   background: z.enum(["solid", "ai_image", "stock_image"]).default("solid"),
   onScreenText: z.array(z.string().min(1).max(140)).min(0).max(6).default([]),
   callouts: z.array(z.string().min(1).max(80)).min(0).max(4).default([]),
+  /** LP-20: device ids from the visual-devices library. Unknown ids are
+   *  dropped after validation so a hallucinated name never reaches the
+   *  designer. */
+  devices: z.array(z.string().min(1).max(40)).min(0).max(3).default([]),
 });
 
 /** AI-authorable quiz types — the player engine's catalog MINUS the two
@@ -118,7 +123,8 @@ OUTPUT: a single JSON object with this exact shape:
   "visualSpec": {
     "background":   "solid" | "ai_image" | "stock_image",
     "onScreenText": [ short phrases displayed during the beat — 2-5 strings, each up to ~120 chars ],
-    "callouts":     [ key terms or short phrases to emphasize — 1-3 strings, each up to ~70 chars ]
+    "callouts":     [ key terms or short phrases to emphasize — 1-3 strings, each up to ~70 chars ],
+    "devices":      [ 1-3 visual device ids from the DEVICE CATALOG below — the animated treatments the designer builds from ]
   },
   "conceptsTaught":   [ 1-3 slug identifiers like "linear_eq_definition" ],
   "conceptsRequired": [ optional 0-2 prerequisite slugs from earlier in the lesson ]
@@ -170,6 +176,10 @@ VISUAL SPEC RULES:
 - onScreenText: 2-5 short phrases the player displays as text overlays synced to narration.
 - callouts: 1-3 KEY terms (single words or short phrases) to emphasize visually.
 - background: "solid" by default; "stock_image" if a real-world photo would help; "ai_image" if a custom illustration is needed.
+- devices: pick 1-3 ids from the DEVICE CATALOG whose teaching purpose matches THIS beat's idea. These are proven animated treatments the designer composes from — choose the device that makes the concept physical, not decorative. Every beat should include "settle-check". Use ONLY ids from the catalog (anything else is discarded). Avoid giving adjacent beats the same dominant device unless the repetition is deliberate continuity (e.g. a running example).
+
+DEVICE CATALOG (id: what it teaches):
+${deviceCatalogForAuthor()}
 
 CONCEPT TAGS:
 - conceptsTaught: 1-3 slug identifiers (snake_case) for what THIS beat teaches.
@@ -360,7 +370,9 @@ export function startAuthorWorker() {
       // 4. Persist + move to ai_review stage
       await db.update(tables.beats).set({
         script: out.script,
-        visualSpec: out.visualSpec,
+        // Sanitize device ids against the library — hallucinated names must
+        // never reach the designer as authoritative instructions.
+        visualSpec: { ...out.visualSpec, devices: resolveDevices(out.visualSpec.devices).map((d) => d.id) },
         ...(beat.beatType === "check" && out.quiz ? { quiz: out.quiz } : {}),
         conceptsTaught: out.conceptsTaught,
         conceptsRequired: out.conceptsRequired,

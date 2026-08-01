@@ -84,6 +84,8 @@ export const VisualSpecSchema = z.object({
   background: z.enum(["solid", "ai_image", "ai_video", "stock_image", "stock_video"]).optional(),
   onScreenText: z.array(z.string()).optional(),
   callouts: z.array(z.string()).optional(),
+  /** Named visual devices (LP-20) from the visual-devices library. */
+  devices: z.array(z.string()).optional(),
 });
 
 export const CreateCourseSchema = z.object({

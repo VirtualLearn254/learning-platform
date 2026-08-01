@@ -41,6 +41,7 @@ export interface ProviderConfig {
   openai?: { apiKey: string };
   deepseek?: { apiKey: string };
   fireworks?: { apiKey: string };
+  moonshot?: { apiKey: string };
 }
 
 /**
@@ -79,6 +80,7 @@ export function createAIClient(
   const openai = config.openai ? new OpenAIProvider({ apiKey: config.openai.apiKey, baseUrl: "https://api.openai.com/v1" }) : null;
   const deepseek = config.deepseek ? new OpenAIProvider({ apiKey: config.deepseek.apiKey, baseUrl: "https://api.deepseek.com/v1" }) : null;
   const fireworks = config.fireworks ? new OpenAIProvider({ apiKey: config.fireworks.apiKey, baseUrl: "https://api.fireworks.ai/inference/v1" }) : null;
+  const moonshot = config.moonshot ? new OpenAIProvider({ apiKey: config.moonshot.apiKey, baseUrl: "https://api.moonshot.ai/v1" }) : null;
 
   /** Returns the effective preference chain with any override-preferred provider pinned to the front. */
   function effectiveChain(profile: AIProfile, override?: ProfileOverride): readonly import("./profiles.js").ProviderId[] {
@@ -97,6 +99,7 @@ export function createAIClient(
       if (id === "openai" && openai)       return { provider: openai,    model: overrideModel ?? profile.modelByProvider.openai };
       if (id === "deepseek" && deepseek)   return { provider: deepseek,  model: overrideModel ?? profile.modelByProvider.deepseek };
       if (id === "fireworks" && fireworks) return { provider: fireworks, model: overrideModel ?? profile.modelByProvider.fireworks };
+      if (id === "moonshot" && moonshot)   return { provider: moonshot,  model: overrideModel ?? profile.modelByProvider.moonshot };
       return null;
     };
     for (const id of chain) {

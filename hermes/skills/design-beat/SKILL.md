@@ -8,6 +8,14 @@ composition, rendered to MP4. Your job is to STEER it — through the
 visualSpec you author and the correction notes you write — and to know good
 composition from bad when you see frames.
 
+## Device palette (LP-20)
+
+When a beat's visualSpec names `devices`, the substrate injects their full
+specs into the designer prompt as a compose-from palette with a timeline
+contract. Steer by CHOOSING devices (via the author) rather than describing
+layouts in prose; correction notes should reference device guarantees by name
+("the balance-equation-bar card did not update on Day 2").
+
 ## The design language (what "right" looks like)
 
 - **One visual idea per sub-scene**, entering in sync with the narration

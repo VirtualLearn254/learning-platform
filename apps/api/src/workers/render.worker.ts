@@ -110,7 +110,7 @@ export function startRenderWorker() {
         stage: "rendering", status: "running", errorMessage: null, updatedAt: new Date(),
       }).where(eq(tables.beats.id, beatId));
 
-      const visual = (beat.visualSpec ?? {}) as { onScreenText?: string[]; callouts?: string[]; style?: string };
+      const visual = (beat.visualSpec ?? {}) as { onScreenText?: string[]; callouts?: string[]; style?: string; devices?: string[] };
 
       // 1. TTS first — the designer times everything to the narration.
       const words = beat.script.trim().split(/\s+/).length;
@@ -191,6 +191,7 @@ export function startRenderWorker() {
             operatorRules,
             designBrief,
             correction,
+            devices: visual.devices,
           };
           const design = await designAnimatedBeat(ai, designInput, note);
           let finalHtml = design.html;

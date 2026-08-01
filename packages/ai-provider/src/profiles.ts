@@ -6,7 +6,7 @@
  * Model names MUST match what the chosen provider actually serves.
  */
 
-export type ProviderId = "anthropic" | "local" | "openai" | "deepseek" | "fireworks";
+export type ProviderId = "anthropic" | "local" | "openai" | "deepseek" | "fireworks" | "moonshot";
 
 export interface AIProfile {
   id: string;
@@ -34,6 +34,7 @@ export const profiles = {
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       fireworks: "accounts/fireworks/models/glm-5p2",
+      moonshot: "kimi-k3",
       openai:   "gpt-4o",
     },
     temperature: 0.7,
@@ -51,6 +52,7 @@ export const profiles = {
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       fireworks: "accounts/fireworks/models/glm-5p2",
+      moonshot: "kimi-k3",
       openai:   "gpt-4o",
     },
     temperature: 0.6,
@@ -66,6 +68,7 @@ export const profiles = {
       local:    "Qwen/Qwen2.5-14B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       fireworks: "accounts/fireworks/models/glm-5p2",
+      moonshot: "kimi-k3",
       openai:   "gpt-4o-mini",
     },
     temperature: 0.3,
@@ -81,6 +84,7 @@ export const profiles = {
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       fireworks: "accounts/fireworks/models/glm-5p2",
+      moonshot: "kimi-k3",
       openai:   "gpt-4o",
     },
     temperature: 0.4,
@@ -96,6 +100,7 @@ export const profiles = {
       local:    "Qwen/Qwen2-VL-7B-Instruct",
       deepseek: "deepseek-chat",
       fireworks: "accounts/fireworks/models/glm-5p2",            // no vision; only here for the union
+      moonshot: "kimi-k3",
       openai:   "gpt-4o",
     },
     temperature: 0.2,
@@ -113,6 +118,7 @@ export const profiles = {
       local:    "Qwen/Qwen2.5-32B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       fireworks: "accounts/fireworks/models/glm-5p2",
+      moonshot: "kimi-k3",
       openai:   "gpt-4o",
     },
     temperature: 0.4,
@@ -128,6 +134,7 @@ export const profiles = {
       local:    "Qwen/Qwen2.5-14B-Instruct-AWQ",
       deepseek: "deepseek-chat",
       fireworks: "accounts/fireworks/models/glm-5p2",
+      moonshot: "kimi-k3",
       openai:   "gpt-4o-mini",
     },
     temperature: 0.2,

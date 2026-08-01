@@ -120,6 +120,9 @@ export interface VisualSpec {
   background?: "solid" | "ai_image" | "ai_video" | "stock_image" | "stock_video";
   onScreenText?: string[];
   callouts?: string[];
+  /** Named visual devices (LP-20) the designer composes from — ids from the
+   *  visual-devices library, chosen by the author per beat. */
+  devices?: string[];
 }
 
 /** H5P-style adaptivity: what happens after an answer. Targets are beat

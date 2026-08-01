@@ -40,6 +40,7 @@ const PROVIDER_DOCS: Record<ProviderId, { displayName: string; envKey: string; s
   openai:    { displayName: "OpenAI",             envKey: "OPENAI_API_KEY",    signupUrl: "https://platform.openai.com/api-keys",   pricing: "$2.50 in / $10 out per 1M (gpt-4o)", secretName: "openai_api_key" },
   deepseek:  { displayName: "DeepSeek",           envKey: "DEEPSEEK_API_KEY",  signupUrl: "https://platform.deepseek.com/api_keys", pricing: "$0.27 in / $1.10 out per 1M",        secretName: "deepseek_api_key" },
   fireworks: { displayName: "Fireworks (GLM 5.2 + open models)", envKey: "FIREWORKS_API_KEY", signupUrl: "https://fireworks.ai/account/api-keys", pricing: "$1.40 in / $4.40 out per 1M (GLM 5.2)", secretName: "fireworks_api_key" },
+  moonshot:  { displayName: "Moonshot (Kimi K3)", envKey: "MOONSHOT_API_KEY",  signupUrl: "https://platform.moonshot.ai",            pricing: "$3 in / $15 out per 1M (K3; cached in $0.30)", secretName: "moonshot_api_key" },
   local:     { displayName: "vLLM (self-hosted)", envKey: "VLLM_BASE_URL",     signupUrl: "https://github.com/vllm-project/vllm",   pricing: "free (your GPU)",                    secretName: "vllm_base_url" },
 };
 
@@ -68,6 +69,7 @@ aiRoute.get("/profiles", async (c) => {
     openai:    await providerConfigured("openai"),
     deepseek:  await providerConfigured("deepseek"),
     fireworks: await providerConfigured("fireworks"),
+    moonshot:  await providerConfigured("moonshot"),
     local:     await providerConfigured("local"),
   };
 
@@ -104,7 +106,7 @@ aiRoute.put("/profiles/:id", async (c) => {
   let body: { preferredProvider?: string; modelId?: string; temperature?: number; maxTokens?: number };
   try { body = await c.req.json(); } catch { return c.json({ ok: false, error: "invalid JSON body" }, 400); }
 
-  if (body.preferredProvider && !(["anthropic", "openai", "deepseek", "fireworks", "local"] as const).includes(body.preferredProvider as ProviderId)) {
+  if (body.preferredProvider && !(["anthropic", "openai", "deepseek", "fireworks", "moonshot", "local"] as const).includes(body.preferredProvider as ProviderId)) {
     return c.json({ ok: false, error: `invalid preferredProvider: ${body.preferredProvider}` }, 400);
   }
   await setProfileOverride(id, {

@@ -27,7 +27,15 @@ what the learner already knows.
 
 ## Visual spec
 
-Shape: `{ background: "solid"|"ai_image"|"stock_image", onScreenText: string[] (≤6, each ≤140 chars), callouts: string[] (≤4, ≤80 chars), style?: string }`
+Shape: `{ background: "solid"|"ai_image"|"stock_image", onScreenText: string[] (≤6, each ≤140 chars), callouts: string[] (≤4, ≤80 chars), style?: string, devices?: string[] (≤3) }`
+
+- **devices (LP-20)**: name 1-3 visual devices from the substrate's
+  visual-devices library (running-ledger, balance-equation-bar, delta-chip,
+  flow-from-sources, split-mirror, myth-truth-panels, count-up-stat,
+  settle-check). Pick by teaching purpose — the device that makes THIS idea
+  physical. Always include settle-check. Unknown ids are dropped by the
+  substrate, so use only these names. Avoid the same dominant device on
+  adjacent beats unless it is deliberate continuity.
 
 - **On-screen text supports, never transcribes.** 3–6 short phrases that
   anchor the narration's key nouns/numbers — not sentences from the script.
