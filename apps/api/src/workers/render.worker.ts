@@ -29,7 +29,7 @@ import { s3 } from "../lib/s3.js";
 import { synthesize, transcribeWords } from "../lib/tts.js";
 import { htmlToPng, assembleMp4 } from "../lib/render.js";
 import { buildBeatHtmlHF, type BeatStyle } from "../lib/hf-templates.js";
-import { designAnimatedBeat, type DesignBeatInput } from "../lib/hf-designer.js";
+import { designAnimatedBeat, lintHfComposition, type DesignBeatInput } from "../lib/hf-designer.js";
 import { renderAnimatedMp4 } from "../lib/hf-render.js";
 import { verifyComposition, captureTimelineFrames, sampleTimes } from "../lib/hf-verifier.js";
 import { getAIClient } from "../lib/ai_client.js";
@@ -129,6 +129,21 @@ export function startRenderWorker() {
 
       if (ANIMATED_ENABLED && !staticOnly) {
         try {
+          // LP-21: bring-your-own-composition — a producer-authored HTML staged
+          // at beats/<id>/authored.html bypasses the AI designer AND the AI
+          // verifier (the producer already judged it); the HF lint contract
+          // still applies, and a lint failure fails LOUD (no static fallback).
+          let finalHtml = "";
+          let authored = false;
+          try {
+            finalHtml = Buffer.from((await s3.getObject(`beats/${beatId}/authored.html`)).body).toString("utf8");
+            authored = true;
+          } catch { /* no authored composition — normal AI designer path */ }
+          if (authored) {
+            const lint = lintHfComposition(finalHtml, durationSec, visual.style ?? styleHints?.style);
+            if (!lint.ok) throw new Error(`authored composition failed HF lint: ${lint.issues.join("; ")}`);
+            await note("using pre-authored composition (designer bypass, no AI)");
+          } else {
           // DB-secrets AI client (anthropic + profile overrides + usage logging)
           // — same client the author/review workers use. The env-only client in
           // services.ts has no anthropic provider and must not be used here.
@@ -194,7 +209,7 @@ export function startRenderWorker() {
             devices: visual.devices,
           };
           const design = await designAnimatedBeat(ai, designInput, note);
-          let finalHtml = design.html;
+          finalHtml = design.html;
 
           // Phase 3: vision verifier — 3 sampled frames checked for overlap /
           // clipping / contrast before the expensive full render. Frames are
@@ -238,6 +253,7 @@ export function startRenderWorker() {
             // Verifier is best-effort — never block the render on its failure.
             console.warn(`[render:${jobId.slice(0, 8)}] verifier errored (skipping):`, verr instanceof Error ? verr.message : verr);
           }
+          } // end AI-designer path (skipped entirely for authored compositions)
 
           htmlKey = `beats/${beatId}/composition.html`;
           await s3.putObject(htmlKey, Buffer.from(finalHtml, "utf8"), { contentType: "text/html" });
@@ -271,6 +287,9 @@ export function startRenderWorker() {
             await note(`designer provider unavailable — refusing to ship a degraded static beat: ${msg.slice(0, 120)}`);
             throw new Error(`designer provider unavailable (no silent static fallback): ${msg.slice(0, 200)}`);
           }
+          // An authored composition failing lint is a producer error — fail
+          // loud for a fix, never silently degrade to a static slide.
+          if (msg.startsWith("authored composition failed HF lint")) throw err;
           console.warn(`[render:${jobId.slice(0, 8)}] animated path failed (content), falling back to static:`, msg);
           animatedFailReason = msg.slice(0, 300);
           await note(`animated failed (${msg.slice(0, 100)}) — falling back to static frame`);
