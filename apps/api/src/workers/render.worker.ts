@@ -27,7 +27,7 @@ import { QueueNames, queues } from "../queue/index.js";
 import { workerConnection } from "./connection.js";
 import { s3 } from "../lib/s3.js";
 import { synthesize, transcribeWords } from "../lib/tts.js";
-import { htmlToPng, assembleMp4 } from "../lib/render.js";
+import { htmlToPng, assembleMp4, probeDurationFromBuffer } from "../lib/render.js";
 import { buildBeatHtmlHF, type BeatStyle } from "../lib/hf-templates.js";
 import { designAnimatedBeat, lintHfComposition, type DesignBeatInput } from "../lib/hf-designer.js";
 import { renderAnimatedMp4 } from "../lib/hf-render.js";
@@ -113,13 +113,30 @@ export function startRenderWorker() {
       const visual = (beat.visualSpec ?? {}) as { onScreenText?: string[]; callouts?: string[]; style?: string; devices?: string[] };
 
       // 1. TTS first — the designer times everything to the narration.
-      const words = beat.script.trim().split(/\s+/).length;
-      await note(`synthesising narration (${words} words)`);
-      const { audio: mp3, durationSec } = await synthesize(beat.script, { voice: "onyx", speed: 0.95 });
-      await note(`audio ${(mp3.length / 1024).toFixed(0)} KB · ${durationSec.toFixed(1)}s`);
-
+      // LP-21: when a pre-authored composition is staged, REUSE the existing
+      // narration audio if present — the composition was timed to that exact
+      // take, and TTS drifts ±0.5s per run (51.0 → 50.0 → 50.8s on identical
+      // input), which coin-flips the lint duration check on every re-render.
       const audioKey = `beats/${beatId}/audio.mp3`;
-      await s3.putObject(audioKey, mp3, { contentType: "audio/mpeg" });
+      let mp3: Buffer | null = null;
+      let durationSec = 0;
+      const hasAuthored = await s3.getObject(`beats/${beatId}/authored.html`).then(() => true).catch(() => false);
+      if (hasAuthored) {
+        try {
+          mp3 = Buffer.from((await s3.getObject(audioKey)).body);
+          durationSec = await probeDurationFromBuffer(mp3, "mp3");
+          await note(`reusing existing narration (authored composition) · ${durationSec.toFixed(1)}s`);
+        } catch { mp3 = null; }
+      }
+      if (!mp3) {
+        const words = beat.script.trim().split(/\s+/).length;
+        await note(`synthesising narration (${words} words)`);
+        const tts = await synthesize(beat.script, { voice: "onyx", speed: 0.95 });
+        mp3 = tts.audio;
+        durationSec = tts.durationSec;
+        await note(`audio ${(mp3.length / 1024).toFixed(0)} KB · ${durationSec.toFixed(1)}s`);
+        await s3.putObject(audioKey, mp3, { contentType: "audio/mpeg" });
+      }
 
       // 2+3. Animated path with graceful fallback to the static frame.
       let mp4: Buffer | null = null;

@@ -233,10 +233,12 @@ export async function concatMp4s(
   }
 }
 
-/** Run ffprobe on a buffer (via temp file — stdin pipe causes EPIPE). */
-async function probeDurationFromBuffer(buf: Buffer): Promise<number> {
+/** Run ffprobe on a buffer (via temp file — stdin pipe causes EPIPE).
+ *  `ext` names the temp file so ffprobe's demuxer guess matches the content
+ *  (mp3 narration reuse in the render worker probes with ext="mp3"). */
+export async function probeDurationFromBuffer(buf: Buffer, ext = "mp4"): Promise<number> {
   const dir = await mkdtemp(join(tmpdir(), "probe-"));
-  const path = join(dir, "in.mp4");
+  const path = join(dir, `in.${ext}`);
   try {
     await writeFile(path, buf);
     return await new Promise((resolve, reject) => {
